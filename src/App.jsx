@@ -606,63 +606,66 @@ if (authMode) {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <div>
-                <label style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#cbd5e1',
-                  display: 'block',
-                  marginBottom: '7px'
-                }}>
-                  Ngày Sinh
-                </label>
-                <input
-                  type="date"
-                  value={regForm.dob}
-                  onChange={e => setRegForm({ ...regForm, dob: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  color: '#cbd5e1',
-                  display: 'block',
-                  marginBottom: '7px'
-                }}>
-                  Số Điện Thoại
-                </label>
-                <input
-                  type="text"
-                  placeholder="0909xxxxxx"
-                  value={regForm.phone}
-                  onChange={e => setRegForm({ ...regForm, phone: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none'
-                  }}
-                  required
-                />
-              </div>
-            </div>
+            <<div style={{ display: 'flex', gap: '14px' }}>
+  <div style={{ flex: 1 }}>
+    <label style={{
+      fontSize: '13px',
+      fontWeight: '600',
+      color: '#cbd5e1',
+      display: 'block',
+      marginBottom: '7px'
+    }}>
+      Ngày Sinh
+    </label>
+    <input
+      type="date"
+      value={regForm.dob}
+      onChange={e => setRegForm({ ...regForm, dob: e.target.value })}
+      style={{
+        width: '100%',
+        background: '#0f172a',
+        border: '1px solid #334155',
+        padding: '12px 14px',
+        borderRadius: '12px',
+        color: '#fff',
+        fontSize: '14px',
+        outline: 'none',
+        boxSizing: 'border-box'
+      }}
+      required
+    />
+  </div>
+
+  <div style={{ flex: 1 }}>
+    <label style={{
+      fontSize: '13px',
+      fontWeight: '600',
+      color: '#cbd5e1',
+      display: 'block',
+      marginBottom: '7px'
+    }}>
+      Số Điện Thoại
+    </label>
+    <input
+      type="text"
+      placeholder="0909xxxxxx"
+      value={regForm.phone}
+      onChange={e => setRegForm({ ...regForm, phone: e.target.value })}
+      style={{
+        width: '100%',
+        background: '#0f172a',
+        border: '1px solid #334155',
+        padding: '12px 14px',
+        borderRadius: '12px',
+        color: '#fff',
+        fontSize: '14px',
+        outline: 'none',
+        boxSizing: 'border-box'
+      }}
+      required
+    />
+  </div>
+</div>
 
             <div>
               <label style={{
