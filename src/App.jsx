@@ -765,7 +765,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB CAMERA TRỰC TIẾP BA VÌ (LINK ẢO ĐÀN BÒ GẶM CỎ) */}
+        {/* TAB CAMERA TRỰC TIẾP BA VÌ (SỬ DỤNG HTML5 VIDEO CHO PHÉP LOOP MƯỢT MÀ) */}
         {activeTab === 'camera' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -776,14 +776,15 @@ export default function App() {
             </div>
 
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', padding: 16 }}>
-              {/* Sử dụng video luồng chuẩn cảnh bò ăn cỏ ngoài đồng cỏ làm link ảo */}
+              {/* Dùng thẻ video HTML5 phát trực tiếp file MP4 mẫu cảnh bò ăn cỏ, tự động lặp lại */}
               <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-                <iframe 
-                  src="https://www.youtube.com/embed/5qap5aO4i9A?autoplay=1&mute=1&loop=1&playlist=5qap5aO4i9A" 
-                  title="Livestream Giả Lập Nông Trại Bò Ba Vì"
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                  allowFullScreen
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
                 />
               </div>
 
