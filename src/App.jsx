@@ -273,7 +273,6 @@ export default function App() {
     }
   };
 
-  // ===== CÁC HÀM ADMIN (ĐÃ SỬA ĐỂ XÓA ĐƯỢC) =====
   const approveMember = async (memberId) => {
     try {
       await updateDoc(doc(db, 'members', memberId), { status: 'approved' });
@@ -290,7 +289,6 @@ export default function App() {
     try {
       await deleteDoc(doc(db, 'members', memberId));
 
-      // Xóa luôn các lệnh nạp tiền của user này
       const depositsSnap = await getDocs(collection(db, 'deposits'));
       const deleteDepositPromises = depositsSnap.docs
         .filter(d => d.data().cccd === (cccdDisplay || memberId))
@@ -301,7 +299,7 @@ export default function App() {
       alert(`Đã xóa thành viên: ${cccdDisplay || memberId}`);
     } catch (error) {
       console.error("Lỗi khi xóa thành viên:", error);
-      alert("Có lỗi khi xóa thành viên. Kiểm tra console hoặc quyền Firestore Rules.");
+      alert("Có lỗi khi xóa thành viên.");
     }
   };
 
@@ -334,404 +332,344 @@ export default function App() {
     alert("Dữ liệu đang được đồng bộ realtime tự động qua Cloud Firestore!");
   };
 
-  // --- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ (ĐÃ LÀM ĐẸP) ---
-if (authMode) {
-  return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '20px',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      color: '#f1f5f9'
-    }}>
+  // ===== GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ =====
+  if (authMode) {
+    return (
       <div style={{
-        background: '#1e293b',
-        border: '1px solid #334155',
-        borderRadius: '24px',
-        padding: '40px 36px',
-        width: '100%',
-        maxWidth: '460px',
-        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+        color: '#f1f5f9'
       }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '72px',
-            height: '72px',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            borderRadius: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '36px',
-            margin: '0 auto 16px',
-            boxShadow: '0 10px 25px rgba(16, 185, 129, 0.3)'
-          }}>
-            🐄
-          </div>
-          <h1 style={{
-            fontSize: '24px',
-            fontWeight: '800',
-            margin: '0 0 6px 0',
-            color: '#fff',
-            letterSpacing: '-0.03em'
-          }}>
-            Bò Vàng Farm O2O
-          </h1>
-          <p style={{
-            fontSize: '14px',
-            color: '#94a3b8',
-            margin: 0,
-            fontWeight: '500'
-          }}>
-            Hệ thống Quản lý Chăn nuôi Thông minh
-          </p>
-        </div>
-
-        {/* Tabs */}
         <div style={{
-          display: 'flex',
-          background: '#0f172a',
-          padding: '5px',
-          borderRadius: '14px',
-          marginBottom: '28px',
-          border: '1px solid #334155'
+          background: '#1e293b',
+          border: '1px solid #334155',
+          borderRadius: '24px',
+          padding: '40px 36px',
+          width: '100%',
+          maxWidth: '460px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
         }}>
-          <button
-            onClick={() => setAuthMode('login')}
-            style={{
-              flex: 1,
-              padding: '11px',
-              background: authMode === 'login' ? '#10b981' : 'transparent',
-              color: authMode === 'login' ? '#fff' : '#94a3b8',
-              border: 'none',
-              borderRadius: '10px',
-              fontWeight: '700',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            Đăng Nhập
-          </button>
-          <button
-            onClick={() => setAuthMode('register')}
-            style={{
-              flex: 1,
-              padding: '11px',
-              background: authMode === 'register' ? '#10b981' : 'transparent',
-              color: authMode === 'register' ? '#fff' : '#94a3b8',
-              border: 'none',
-              borderRadius: '10px',
-              fontWeight: '700',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            Đăng Ký Thành Viên
-          </button>
-        </div>
-
-        {/* Form Đăng nhập */}
-        {authMode === 'login' ? (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '8px'
-              }}>
-                Số CCCD / Tài khoản Admin
-              </label>
-              <input
-                type="text"
-                placeholder="Nhập số CCCD của bạn"
-                value={loginUsername}
-                onChange={e => setLoginUsername(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '13px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '15px',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                required
-              />
-            </div>
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '8px'
-              }}>
-                Mật khẩu
-              </label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={loginPassword}
-                onChange={e => setLoginPassword(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '13px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '15px',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
-                color: '#fff',
-                border: 'none',
-                padding: '15px',
-                borderRadius: '14px',
-                fontWeight: '700',
-                fontSize: '15px',
-                cursor: 'pointer',
-                marginTop: '8px',
-                boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)',
-                transition: 'transform 0.15s'
-              }}
-            >
-              Đăng Nhập Hệ Thống
-            </button>
-          </form>
-        ) : (
-          /* Form Đăng ký - ĐÃ LÀM ĐẸP */
-          <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '7px'
-              }}>
-                Họ và Tên
-              </label>
-              <input
-                type="text"
-                placeholder="Nguyễn Văn A"
-                value={regForm.fullName}
-                onChange={e => setRegForm({ ...regForm, fullName: e.target.value })}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '7px'
-              }}>
-                Số CCCD <span style={{ color: '#94a3b8', fontWeight: '400' }}>(dùng làm tên đăng nhập)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="001098xxxxxx"
-                value={regForm.cccd}
-                onChange={e => setRegForm({ ...regForm, cccd: e.target.value })}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '7px'
-              }}>
-                Mật khẩu
-              </label>
-              <input
-                type="password"
-                placeholder="Tối thiểu 6 ký tự"
-                value={regForm.password}
-                onChange={e => setRegForm({ ...regForm, password: e.target.value })}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            <<div style={{ display: 'flex', gap: '14px' }}>
-  <div style={{ flex: 1 }}>
-    <label style={{
-      fontSize: '13px',
-      fontWeight: '600',
-      color: '#cbd5e1',
-      display: 'block',
-      marginBottom: '7px'
-    }}>
-      Ngày Sinh
-    </label>
-    <input
-      type="date"
-      value={regForm.dob}
-      onChange={e => setRegForm({ ...regForm, dob: e.target.value })}
-      style={{
-        width: '100%',
-        background: '#0f172a',
-        border: '1px solid #334155',
-        padding: '12px 14px',
-        borderRadius: '12px',
-        color: '#fff',
-        fontSize: '14px',
-        outline: 'none',
-        boxSizing: 'border-box'
-      }}
-      required
-    />
-  </div>
-
-  <div style={{ flex: 1 }}>
-    <label style={{
-      fontSize: '13px',
-      fontWeight: '600',
-      color: '#cbd5e1',
-      display: 'block',
-      marginBottom: '7px'
-    }}>
-      Số Điện Thoại
-    </label>
-    <input
-      type="text"
-      placeholder="0909xxxxxx"
-      value={regForm.phone}
-      onChange={e => setRegForm({ ...regForm, phone: e.target.value })}
-      style={{
-        width: '100%',
-        background: '#0f172a',
-        border: '1px solid #334155',
-        padding: '12px 14px',
-        borderRadius: '12px',
-        color: '#fff',
-        fontSize: '14px',
-        outline: 'none',
-        boxSizing: 'border-box'
-      }}
-      required
-    />
-  </div>
-</div>
-
-            <div>
-              <label style={{
-                fontSize: '13px',
-                fontWeight: '600',
-                color: '#cbd5e1',
-                display: 'block',
-                marginBottom: '7px'
-              }}>
-                Địa Chỉ Thường Trú
-              </label>
-              <input
-                type="text"
-                placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"
-                value={regForm.address}
-                onChange={e => setRegForm({ ...regForm, address: e.target.value })}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '14px',
-                  outline: 'none'
-                }}
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              style={{
-                width: '100%',
-                background: 'linear-gradient(135deg, #10b981, #059669)',
-                color: '#fff',
-                border: 'none',
-                padding: '15px',
-                borderRadius: '14px',
-                fontWeight: '700',
-                fontSize: '15px',
-                cursor: 'pointer',
-                marginTop: '10px',
-                boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
-              }}
-            >
-              Gửi Hồ Sơ Đăng Ký
-            </button>
-
-            <p style={{
-              textAlign: 'center',
-              fontSize: '12px',
-              color: '#64748b',
-              margin: '8px 0 0 0',
-              lineHeight: '1.5'
+          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{
+              width: '72px',
+              height: '72px',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              borderRadius: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '36px',
+              margin: '0 auto 16px',
+              boxShadow: '0 10px 25px rgba(16, 185, 129, 0.3)'
             }}>
-              Hồ sơ sẽ được gửi lên Cloud để Admin phê duyệt
+              🐄
+            </div>
+            <h1 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 6px 0', color: '#fff' }}>
+              Bò Vàng Farm O2O
+            </h1>
+            <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0 }}>
+              Hệ thống Quản lý Chăn nuôi Thông minh
             </p>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
+          </div>
 
-  // ===== GIAO DIỆN ADMIN =====
+          <div style={{
+            display: 'flex',
+            background: '#0f172a',
+            padding: '5px',
+            borderRadius: '14px',
+            marginBottom: '28px',
+            border: '1px solid #334155'
+          }}>
+            <button
+              onClick={() => setAuthMode('login')}
+              style={{
+                flex: 1,
+                padding: '11px',
+                background: authMode === 'login' ? '#10b981' : 'transparent',
+                color: authMode === 'login' ? '#fff' : '#94a3b8',
+                border: 'none',
+                borderRadius: '10px',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Đăng Nhập
+            </button>
+            <button
+              onClick={() => setAuthMode('register')}
+              style={{
+                flex: 1,
+                padding: '11px',
+                background: authMode === 'register' ? '#10b981' : 'transparent',
+                color: authMode === 'register' ? '#fff' : '#94a3b8',
+                border: 'none',
+                borderRadius: '10px',
+                fontWeight: '700',
+                fontSize: '14px',
+                cursor: 'pointer'
+              }}
+            >
+              Đăng Ký Thành Viên
+            </button>
+          </div>
+
+          {authMode === 'login' ? (
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
+                  Số CCCD / Tài khoản Admin
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nhập số CCCD của bạn"
+                  value={loginUsername}
+                  onChange={e => setLoginUsername(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '13px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '15px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
+                  Mật khẩu
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '13px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '15px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '15px',
+                  borderRadius: '14px',
+                  fontWeight: '700',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  marginTop: '8px',
+                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
+                }}
+              >
+                Đăng Nhập Hệ Thống
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                  Họ và Tên
+                </label>
+                <input
+                  type="text"
+                  placeholder="Nguyễn Văn A"
+                  value={regForm.fullName}
+                  onChange={e => setRegForm({ ...regForm, fullName: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                  Số CCCD <span style={{ color: '#94a3b8', fontWeight: '400' }}>(dùng làm tên đăng nhập)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="001098xxxxxx"
+                  value={regForm.cccd}
+                  onChange={e => setRegForm({ ...regForm, cccd: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                  Mật khẩu
+                </label>
+                <input
+                  type="password"
+                  placeholder="Tối thiểu 6 ký tự"
+                  value={regForm.password}
+                  onChange={e => setRegForm({ ...regForm, password: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+
+              {/* ===== ĐÃ SỬA KHÔNG BỊ ĐÈ ===== */}
+              <div style={{ display: 'flex', gap: '14px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                    Ngày Sinh
+                  </label>
+                  <input
+                    type="date"
+                    value={regForm.dob}
+                    onChange={e => setRegForm({ ...regForm, dob: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    required
+                  />
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                    Số Điện Thoại
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="0909xxxxxx"
+                    value={regForm.phone}
+                    onChange={e => setRegForm({ ...regForm, phone: e.target.value })}
+                    style={{
+                      width: '100%',
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      padding: '12px 14px',
+                      borderRadius: '12px',
+                      color: '#fff',
+                      fontSize: '14px',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
+                  Địa Chỉ Thường Trú
+                </label>
+                <input
+                  type="text"
+                  placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"
+                  value={regForm.address}
+                  onChange={e => setRegForm({ ...regForm, address: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    color: '#fff',
+                    fontSize: '14px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  width: '100%',
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '15px',
+                  borderRadius: '14px',
+                  fontWeight: '700',
+                  fontSize: '15px',
+                  cursor: 'pointer',
+                  marginTop: '10px',
+                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
+                }}
+              >
+                Gửi Hồ Sơ Đăng Ký
+              </button>
+
+              <p style={{
+                textAlign: 'center',
+                fontSize: '12px',
+                color: '#64748b',
+                margin: '8px 0 0 0',
+                lineHeight: '1.5'
+              }}>
+                Hồ sơ sẽ được gửi lên Cloud để Admin phê duyệt
+              </p>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ===== ADMIN PANEL =====
   if (currentUser && currentUser.role === 'admin') {
     const pendingMembersCount = members.filter(m => m.status === 'pending').length;
 
@@ -860,7 +798,6 @@ if (authMode) {
             </table>
           </div>
 
-          {/* Phần nạp tiền và bảng giá giữ nguyên */}
           <h3 style={{ fontSize: '17px', fontWeight: '800', marginBottom: '14px' }}>💰 Phê Duyệt Lệnh Nạp Tiền Của User</h3>
           <div style={{ background: '#1e293b', borderRadius: '20px', border: '1px solid #334155', overflow: 'hidden', marginBottom: '36px' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
@@ -926,7 +863,7 @@ if (authMode) {
                   type="number"
                   value={editingPrices.milkCow.price}
                   onChange={e => setEditingPrices({ ...editingPrices, milkCow: { ...editingPrices.milkCow, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700' }}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
@@ -935,7 +872,7 @@ if (authMode) {
                   type="number"
                   value={editingPrices.goldCow.price}
                   onChange={e => setEditingPrices({ ...editingPrices, goldCow: { ...editingPrices.goldCow, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700' }}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
@@ -944,7 +881,7 @@ if (authMode) {
                   type="number"
                   value={editingPrices.grass.price}
                   onChange={e => setEditingPrices({ ...editingPrices, grass: { ...editingPrices.grass, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700' }}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
@@ -953,7 +890,7 @@ if (authMode) {
                   type="number"
                   value={editingPrices.milkSellPrice}
                   onChange={e => setEditingPrices({ ...editingPrices, milkSellPrice: Number(e.target.value) })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700' }}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -969,7 +906,7 @@ if (authMode) {
     );
   }
 
-  // ===== GIAO DIỆN USER =====
+  // ===== USER PANEL =====
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f1f5f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", paddingBottom: '70px' }}>
       <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
