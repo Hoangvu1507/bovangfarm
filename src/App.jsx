@@ -765,7 +765,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB CAMERA TRỰC TIẾP BA VÌ (SỬ DỤNG HÌNH ĐỘNG/GIF MÔ PHỎNG BÒ ĂN CỎ) */}
+        {/* TAB CAMERA TRỰC TIẾP BA VÌ (DÙNG VIDEO HTML5 MP4 MẪU ỔN ĐỊNH CAO) */}
         {activeTab === 'camera' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -776,15 +776,20 @@ export default function App() {
             </div>
 
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', padding: 16 }}>
-              {/* Khung hiển thị hình ảnh động chất lượng cao mô phỏng bò gặm cỏ tại trang trại */}
-              <div style={{ position: 'relative', width: '100%', paddingTop: '52%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
-                <img 
-                  src="https://images.unsplash.com/photo-1527153857715-3908f2ae5e61?auto=format&fit=crop&w=1200&q=80" 
-                  alt="Đàn bò Ba Vì"
+              {/* Thẻ video HTML5 chạy video mẫu trực tiếp, tự động lặp lại */}
+              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
                   style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-                <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(0,0,0,0.6)', padding: '6px 12px', borderRadius: 8, fontSize: 12, color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  🟢 Trực tiếp từ Đồng cỏ Ba Vì · FPS: 30 · Độ phân giải: 1080p
+                >
+                  <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
+                  Trình duyệt của bạn không hỗ trợ thẻ video.
+                </video>
+                <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(0,0,0,0.7)', padding: '6px 12px', borderRadius: 8, fontSize: 12, color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, backdropFilter: 'blur(4px)' }}>
+                  🟢 Camera #01 · Trực tiếp từ Đồng cỏ Ba Vì · 1080p
                 </div>
               </div>
 
