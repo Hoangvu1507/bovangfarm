@@ -7,7 +7,7 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
   getFirestore, collection, doc, getDoc, setDoc, updateDoc,
-  onSnapshot, deleteDoc, getDocs
+  onSnapshot, deleteDoc, getDocs, addDoc
 } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -55,17 +55,18 @@ export default function App() {
   });
   const [editingPrices, setEditingPrices] = useState({ ...shopPrices });
 
-  const [balance, setBalance] = useState(1500000);
+  const [balance, setBalance] = useState(0);
   const [activeTab, setActiveTab] = useState('farm');
   const [inventory, setInventory] = useState({
-    grass: 45,
-    milk: 18,
-    medicine: 5
+    grass: 0,
+    milk: 0,
+    medicine: 0
   });
-  const [cows, setCows] = useState([
-    { id: 1, name: 'Bò Sữa Hà Lan #01', tag: 'BV-1001', type: 'milk', hunger: 80, owner: '001098001234' },
-    { id: 2, name: 'Bò Vàng Sinh Sản #01', tag: 'BV-1002', type: 'gold', hunger: 90, owner: '001098001234' }
-  ]);
+  const [cows, setCows] = useState([]);
+
+  // State nạp tiền
+  const [depositAmount, setDepositAmount] = useState('');
+  const [showDepositModal, setShowDepositModal] = useState(false);
 
   useEffect(() => {
     const unsubMembers = onSnapshot(collection(db, 'members'), (snapshot) => {
@@ -105,7 +106,7 @@ export default function App() {
     if (currentUser && currentUser.role === 'user') {
       const me = members.find(m => m.cccd === currentUser.cccd || m.id === currentUser.cccd);
       if (me) {
-        setBalance(me.balance);
+        setBalance(me.balance || 0);
       }
     }
   }, [members, currentUser]);
@@ -129,7 +130,7 @@ export default function App() {
       const userData = { role: 'user', ...found };
       setCurrentUser(userData);
       localStorage.setItem('farm_logged_user', JSON.stringify(userData));
-      setBalance(found.balance);
+      setBalance(found.balance || 0);
       setAuthMode(null);
     } else {
       alert("Sai số CCCD hoặc mật khẩu, hoặc tài khoản chưa được duyệt!");
@@ -156,7 +157,7 @@ export default function App() {
         return;
       }
 
-      const newMember = { ...regForm, cccd: cleanCccd, balance: 1000000, status: 'pending' };
+      const newMember = { ...regForm, cccd: cleanCccd, balance: 0, status: 'pending' };
       await setDoc(docRef, newMember);
       alert("Đăng ký thành công! Hồ sơ đã được đồng bộ lên Cloud để Admin phê duyệt.");
       setAuthMode('login');
@@ -226,7 +227,7 @@ export default function App() {
     if (itemKey === 'grass') cost = shopPrices.grass.price;
 
     if (balance < cost) {
-      alert("Số dư tài khoản không đủ!");
+      alert("Số dư tài khoản không đủ! Vui lòng nạp thêm tiền.");
       return;
     }
 
@@ -270,6 +271,32 @@ export default function App() {
       alert(`Đã bán ${litersToSell} lít sữa thu về +${earnedMoney.toLocaleString()} đ!`);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // ===== HÀM NẠP TIỀN =====
+  const requestDeposit = async () => {
+    const amount = Number(depositAmount);
+    if (!amount || amount < 10000) {
+      alert("Số tiền nạp tối thiểu là 10.000đ");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'deposits'), {
+        cccd: currentUser.cccd,
+        amount: amount,
+        time: new Date().toLocaleString('vi-VN'),
+        status: 'pending',
+        fullName: currentUser.fullName
+      });
+
+      alert("Đã gửi yêu cầu nạp tiền thành công!\nVui lòng chuyển khoản theo QR hoặc thông tin bên dưới và chờ Admin xác nhận.");
+      setDepositAmount('');
+      setShowDepositModal(false);
+    } catch (error) {
+      console.error(error);
+      alert("Có lỗi xảy ra, vui lòng thử lại.");
     }
   };
 
@@ -489,9 +516,7 @@ export default function App() {
           ) : (
             <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                  Họ và Tên
-                </label>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Họ và Tên</label>
                 <input
                   type="text"
                   placeholder="Nguyễn Văn A"
@@ -537,9 +562,7 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                  Mật khẩu
-                </label>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Mật khẩu</label>
                 <input
                   type="password"
                   placeholder="Tối thiểu 6 ký tự"
@@ -560,12 +583,9 @@ export default function App() {
                 />
               </div>
 
-              {/* ===== ĐÃ SỬA KHÔNG BỊ ĐÈ ===== */}
               <div style={{ display: 'flex', gap: '14px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                    Ngày Sinh
-                  </label>
+                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Ngày Sinh</label>
                   <input
                     type="date"
                     value={regForm.dob}
@@ -584,11 +604,8 @@ export default function App() {
                     required
                   />
                 </div>
-
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                    Số Điện Thoại
-                  </label>
+                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Số Điện Thoại</label>
                   <input
                     type="text"
                     placeholder="0909xxxxxx"
@@ -611,9 +628,7 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                  Địa Chỉ Thường Trú
-                </label>
+                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Địa Chỉ Thường Trú</label>
                 <input
                   type="text"
                   placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"
@@ -653,13 +668,7 @@ export default function App() {
                 Gửi Hồ Sơ Đăng Ký
               </button>
 
-              <p style={{
-                textAlign: 'center',
-                fontSize: '12px',
-                color: '#64748b',
-                margin: '8px 0 0 0',
-                lineHeight: '1.5'
-              }}>
+              <p style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', margin: '8px 0 0 0' }}>
                 Hồ sơ sẽ được gửi lên Cloud để Admin phê duyệt
               </p>
             </form>
@@ -723,20 +732,14 @@ export default function App() {
               <tbody>
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
-                      Không có thành viên nào trên Cloud.
-                    </td>
+                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Không có thành viên nào trên Cloud.</td>
                   </tr>
                 ) : (
                   members.map((m) => (
                     <tr key={m.id} style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.4)' }}>
                       <td style={{ padding: '14px 18px', fontWeight: '700', color: '#fff' }}>{m.fullName}</td>
-                      <td style={{ padding: '14px 18px', color: '#34d399', fontFamily: 'monospace', fontWeight: '600' }}>
-                        {m.cccd || m.id}
-                      </td>
-                      <td style={{ padding: '14px 18px', color: '#cbd5e1' }}>
-                        {m.phone} - {m.address}
-                      </td>
+                      <td style={{ padding: '14px 18px', color: '#34d399', fontFamily: 'monospace', fontWeight: '600' }}>{m.cccd || m.id}</td>
+                      <td style={{ padding: '14px 18px', color: '#cbd5e1' }}>{m.phone} - {m.address}</td>
                       <td style={{ padding: '14px 18px' }}>
                         <span style={{
                           background: m.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
@@ -754,38 +757,14 @@ export default function App() {
                           {m.status !== 'approved' && (
                             <button
                               onClick={() => approveMember(m.id)}
-                              style={{
-                                background: '#059669',
-                                color: '#fff',
-                                border: 'none',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                fontWeight: '700',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '12px'
-                              }}
+                              style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
                             >
                               <Check size={14} /> Duyệt
                             </button>
                           )}
                           <button
                             onClick={() => rejectMember(m.id, m.cccd)}
-                            style={{
-                              background: '#dc2626',
-                              color: '#fff',
-                              border: 'none',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontWeight: '700',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '12px'
-                            }}
+                            style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
                           >
                             <Trash2 size={14} /> Xóa
                           </button>
@@ -813,9 +792,7 @@ export default function App() {
               <tbody>
                 {pendingDeposits.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>
-                      Không có lệnh nạp tiền nào đang chờ.
-                    </td>
+                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Không có lệnh nạp tiền nào đang chờ.</td>
                   </tr>
                 ) : (
                   pendingDeposits.map((dep) => (
@@ -907,6 +884,10 @@ export default function App() {
   }
 
   // ===== USER PANEL =====
+  const transferContent = `BVF${currentUser?.cccd || ''}`;
+  const qrAmount = Number(depositAmount) || 0;
+  const qrUrl = `https://img.vietqr.io/image/TCB-991169999999-compact2.png?amount=${qrAmount}&addInfo=${encodeURIComponent(transferContent)}&accountName=${encodeURIComponent('NGO HOANG VU')}`;
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f1f5f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", paddingBottom: '70px' }}>
       <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -917,11 +898,26 @@ export default function App() {
             <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Xin chào, {currentUser?.fullName}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ background: '#0f172a', padding: '8px 14px', borderRadius: '12px', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ color: '#fbbf24' }}>💰</span>
             <span style={{ fontWeight: '800', color: '#34d399' }}>{balance.toLocaleString()} đ</span>
           </div>
+          <button
+            onClick={() => setShowDepositModal(true)}
+            style={{
+              background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+              color: '#fff',
+              border: 'none',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              fontWeight: '700',
+              fontSize: '13px',
+              cursor: 'pointer'
+            }}
+          >
+            + Nạp tiền
+          </button>
           <button
             onClick={handleLogout}
             style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -952,53 +948,59 @@ export default function App() {
             <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '16px' }}>
               Đàn Bò Của Bạn ({cows.filter(c => c.owner === currentUser.cccd).length} con)
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-              {cows.filter(c => c.owner === currentUser.cccd).map(cow => (
-                <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700' }}>{cow.name}</h4>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>Tag: {cow.tag}</span>
+            {cows.filter(c => c.owner === currentUser.cccd).length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: '16px', padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+                Bạn chưa có bò nào. Hãy vào Cửa hàng để mua bò!
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+                {cows.filter(c => c.owner === currentUser.cccd).map(cow => (
+                  <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700' }}>{cow.name}</h4>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>Tag: {cow.tag}</span>
+                      </div>
+                      <span style={{
+                        background: cow.type === 'milk' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                        color: cow.type === 'milk' ? '#60a5fa' : '#facc15',
+                        padding: '4px 8px',
+                        borderRadius: '8px',
+                        fontSize: '11px',
+                        fontWeight: '700'
+                      }}>
+                        {cow.type === 'milk' ? 'Bò Sữa' : 'Bò Vàng'}
+                      </span>
                     </div>
-                    <span style={{
-                      background: cow.type === 'milk' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                      color: cow.type === 'milk' ? '#60a5fa' : '#facc15',
-                      padding: '4px 8px',
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                      fontWeight: '700'
-                    }}>
-                      {cow.type === 'milk' ? 'Bò Sữa' : 'Bò Vàng'}
-                    </span>
-                  </div>
-                  <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
-                      <span>Độ no</span>
-                      <span style={{ fontWeight: '700', color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
+                        <span>Độ no</span>
+                        <span style={{ fontWeight: '700', color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
+                      </div>
+                      <div style={{ width: '100%', height: '8px', background: '#0f172a', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${cow.hunger}%`, height: '100%', background: cow.hunger < 40 ? '#ef4444' : '#10b981' }}></div>
+                      </div>
                     </div>
-                    <div style={{ width: '100%', height: '8px', background: '#0f172a', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${cow.hunger}%`, height: '100%', background: cow.hunger < 40 ? '#ef4444' : '#10b981' }}></div>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => feedCow(cow.id)}
-                      style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
-                    >
-                      🌿 Cho Ăn
-                    </button>
-                    {cow.type === 'milk' && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
                       <button
-                        onClick={() => harvestMilk(cow.id)}
-                        style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                        onClick={() => feedCow(cow.id)}
+                        style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
                       >
-                        🥛 Thu Sữa
+                        🌿 Cho Ăn
                       </button>
-                    )}
+                      {cow.type === 'milk' && (
+                        <button
+                          onClick={() => harvestMilk(cow.id)}
+                          style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
+                        >
+                          🥛 Thu Sữa
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div>
@@ -1067,6 +1069,138 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* ===== MODAL NẠP TIỀN + QR CODE ===== */}
+      {showDepositModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#1e293b',
+            borderRadius: '20px',
+            padding: '28px',
+            width: '100%',
+            maxWidth: '440px',
+            border: '1px solid #334155',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '800', textAlign: 'center' }}>
+              Nạp tiền vào tài khoản
+            </h3>
+
+            {/* Chọn nhanh số tiền */}
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '10px' }}>Chọn nhanh số tiền:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {[100000, 200000, 500000, 1000000, 2000000].map(amount => (
+                  <button
+                    key={amount}
+                    onClick={() => setDepositAmount(amount.toString())}
+                    style={{
+                      background: depositAmount === amount.toString() ? '#10b981' : '#0f172a',
+                      color: depositAmount === amount.toString() ? '#fff' : '#cbd5e1',
+                      border: '1px solid #334155',
+                      padding: '8px 14px',
+                      borderRadius: '10px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {amount.toLocaleString()}đ
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
+                Hoặc nhập số tiền khác (đ)
+              </label>
+              <input
+                type="number"
+                placeholder="Ví dụ: 300000"
+                value={depositAmount}
+                onChange={e => setDepositAmount(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: '#0f172a',
+                  border: '1px solid #334155',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  color: '#fff',
+                  fontSize: '15px',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            {/* Thông tin chuyển khoản + QR */}
+            {qrAmount >= 10000 && (
+              <div style={{ background: '#0f172a', borderRadius: '14px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#94a3b8' }}>Quét mã QR để thanh toán:</p>
+                <img
+                  src={qrUrl}
+                  alt="QR Code nạp tiền"
+                  style={{ width: '220px', height: '220px', borderRadius: '12px', background: '#fff', padding: '8px' }}
+                />
+                <div style={{ marginTop: '14px', textAlign: 'left', fontSize: '13px', lineHeight: '1.6' }}>
+                  <p style={{ margin: '0 0 4px 0' }}><strong>Ngân hàng:</strong> Techcombank</p>
+                  <p style={{ margin: '0 0 4px 0' }}><strong>Số tài khoản:</strong> 991169999999</p>
+                  <p style={{ margin: '0 0 4px 0' }}><strong>Chủ tài khoản:</strong> Ngô Hoàng Vũ</p>
+                  <p style={{ margin: '0 0 4px 0', color: '#34d399' }}><strong>Nội dung CK:</strong> {transferContent}</p>
+                  <p style={{ margin: '0', color: '#fbbf24' }}><strong>Số tiền:</strong> {qrAmount.toLocaleString()} đ</p>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowDepositModal(false);
+                  setDepositAmount('');
+                }}
+                style={{
+                  flex: 1,
+                  background: '#334155',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '13px',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Đóng
+              </button>
+              <button
+                onClick={requestDeposit}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '13px',
+                  borderRadius: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Tôi đã chuyển khoản
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
