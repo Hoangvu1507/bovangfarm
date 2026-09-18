@@ -36,30 +36,33 @@ export default function App() {
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [regForm, setRegForm] = useState({ fullName: '', cccd: '', password: '', dob: '', phone: '', address: '' });
-
+  
   const [members, setMembers] = useState([]);
   const [pendingDeposits, setPendingDeposits] = useState([]);
-  const [sharedCows, setSharedCows] = useState([]); // bò sở hữu chung
+  const [sharedCows, setSharedCows] = useState([]); // Bò sở hữu chung
+  
   const [shopPrices, setShopPrices] = useState({
     milkCow: { name: 'Bò Sữa Cao Sản', price: 300000, desc: 'Cho sữa tươi định kỳ hàng ngày.' },
     goldCow: { name: 'Bò Vàng Giống', price: 500000, desc: 'Sinh sản bò con, gia tăng tài sản.' },
     grass: { name: 'Gói 20 Bó Cỏ', price: 50000, desc: 'Thức ăn dinh dưỡng cho đàn bò.' },
     milkSellPrice: 25000
   });
+  
   const [editingPrices, setEditingPrices] = useState({ ...shopPrices });
-
   const [balance, setBalance] = useState(0);
-  const [activeTab, setActiveTab] = useState('farm');
+  const [activeTab, setActiveTab] = useState('invest');
+  
   const [inventory, setInventory] = useState({ grass: 0, milk: 0, medicine: 0 });
-  const [cows, setCows] = useState([]); // bò cá nhân cũ
+  const [cows, setCows] = useState([]); // Bò cá nhân
 
-  // Nạp tiền
+  // Nạp tiền modal
   const [depositAmount, setDepositAmount] = useState('');
   const [showDepositModal, setShowDepositModal] = useState(false);
-
+  
   // Admin tạo bò
   const [newCowName, setNewCowName] = useState('');
 
+  // Lắng nghe dữ liệu realtime từ Firestore
   useEffect(() => {
     const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
       setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -87,14 +90,19 @@ export default function App() {
     return () => { unsubMembers(); unsubDeposits(); unsubSharedCows(); unsubPrices(); };
   }, []);
 
+  // Đồng bộ số dư và kho cá nhân của user
   useEffect(() => {
     if (currentUser?.role === 'user') {
       const me = members.find(m => m.cccd === currentUser.cccd || m.id === currentUser.cccd);
-      if (me) setBalance(me.balance || 0);
+      if (me) {
+        setBalance(me.balance || 0);
+        if (me.inventory) setInventory(me.inventory);
+        if (me.cows) setCows(me.cows);
+      }
     }
   }, [members, currentUser]);
 
-  // ===== AUTH =====
+  // ===== XÁC THỰC (AUTH) =====
   const handleLogin = (e) => {
     e.preventDefault();
     if (loginUsername === '001098000393' && loginPassword === 'Phuongthao97@@') {
@@ -125,7 +133,14 @@ export default function App() {
     try {
       const docRef = doc(db, 'members', cleanCccd);
       if ((await getDoc(docRef)).exists()) return alert("CCCD đã tồn tại!");
-      await setDoc(docRef, { ...regForm, cccd: cleanCccd, balance: 0, status: 'pending' });
+      await setDoc(docRef, { 
+        ...regForm, 
+        cccd: cleanCccd, 
+        balance: 0, 
+        status: 'pending',
+        inventory: { grass: 0, milk: 0, medicine: 0 },
+        cows: []
+      });
       alert("Đăng ký thành công! Chờ Admin duyệt.");
       setAuthMode('login');
       setRegForm({ fullName: '', cccd: '', password: '', dob: '', phone: '', address: '' });
@@ -189,7 +204,7 @@ export default function App() {
     if (cow.availableShares < percent) return alert("Không đủ cổ phần trống!");
     const cost = Math.round(MILK_COW_PRICE * percent / 100);
     if (balance < cost) return alert("Số dư không đủ! Vui lòng nạp thêm tiền.");
-
+    
     const myOwnership = cow.owners?.find(o => o.cccd === currentUser.cccd);
     const currentPercent = myOwnership ? myOwnership.percent : 0;
     if (currentPercent + percent > 100) return alert("Bạn không thể sở hữu quá 100%!");
@@ -241,10 +256,8 @@ export default function App() {
     if (!cow.nextHarvestAt || now < cow.nextHarvestAt) {
       return alert("Chưa đến giờ vắt sữa!");
     }
-
     const liters = Math.floor(Math.random() * 5) + 5; // 5-9 lít
     const totalMoney = liters * (shopPrices.milkSellPrice || 25000);
-
     try {
       for (const owner of cow.owners || []) {
         const shareMoney = Math.floor(totalMoney * owner.percent / 100);
@@ -255,12 +268,10 @@ export default function App() {
           await updateDoc(memberRef, { balance: currentBal + shareMoney });
         }
       }
-
       await updateDoc(doc(db, 'cows', cow.id), {
         lastHarvestAt: now,
         nextHarvestAt: now + MILK_INTERVAL_HOURS * 60 * 60 * 1000
       });
-
       alert(`Vắt sữa thành công!\nSản lượng: ${liters} lít\nTổng tiền: ${totalMoney.toLocaleString()}đ\nĐã chia theo tỷ lệ sở hữu.`);
     } catch (err) {
       console.error(err);
@@ -268,21 +279,30 @@ export default function App() {
     }
   };
 
-  // ===== CÁC HÀM CŨ =====
-  const feedCow = (cowId) => {
-    if (inventory.grass <= 0) return alert("Bạn đã hết cỏ!");
-    setInventory(prev => ({ ...prev, grass: prev.grass - 1 }));
-    setCows(prev => prev.map(c => c.id === cowId ? { ...c, hunger: Math.min(100, c.hunger + 25) } : c));
+  // ===== TÍNH NĂNG CÁ NHÂN & CỬA HÀNG =====
+  const feedCow = async (cowId) => {
+    if (inventory.grass <= 0) return alert("Bạn đã hết cỏ! Hãy mua thêm ở cửa hàng.");
+    const newInventory = { ...inventory, grass: inventory.grass - 1 };
+    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.min(100, c.hunger + 25) } : c);
+    
+    setInventory(newInventory);
+    setCows(newCows);
+    await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory, cows: newCows });
     alert("Đã cho bò ăn cỏ!");
   };
 
-  const harvestMilk = (cowId) => {
+  const harvestMilk = async (cowId) => {
     const cow = cows.find(c => c.id === cowId);
     if (cow.type !== 'milk') return alert("Chỉ bò sữa mới cho sữa!");
-    if (cow.hunger < 40) return alert("Bò đang đói!");
-    setInventory(prev => ({ ...prev, milk: prev.milk + 5 }));
-    setCows(prev => prev.map(c => c.id === cowId ? { ...c, hunger: Math.max(10, c.hunger - 30) } : c));
-    alert("Thu hoạch +5 lít sữa!");
+    if (cow.hunger < 40) return alert("Bò đang đói, hãy cho ăn trước!");
+    
+    const newInventory = { ...inventory, milk: inventory.milk + 5 };
+    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.max(10, c.hunger - 30) } : c);
+
+    setInventory(newInventory);
+    setCows(newCows);
+    await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory, cows: newCows });
+    alert("Thu hoạch thành công +5 lít sữa tươi!");
   };
 
   const buyItem = async (itemKey) => {
@@ -290,59 +310,76 @@ export default function App() {
     if (itemKey === 'milkCow') cost = shopPrices.milkCow.price;
     if (itemKey === 'goldCow') cost = shopPrices.goldCow.price;
     if (itemKey === 'grass') cost = shopPrices.grass.price;
-    if (balance < cost) return alert("Số dư không đủ!");
 
+    if (balance < cost) return alert("Số dư không đủ!");
     const newBalance = balance - cost;
     setBalance(newBalance);
+
+    let newInventory = { ...inventory };
+    let newCows = [...cows];
+
+    if (itemKey === 'grass') {
+      newInventory.grass += 20;
+    } else if (itemKey === 'milkCow') {
+      newCows.push({ id: Date.now(), name: `Bò Sữa #${newCows.length + 1}`, tag: `BV-100${newCows.length + 1}`, type: 'milk', hunger: 100 });
+    } else if (itemKey === 'goldCow') {
+      newCows.push({ id: Date.now(), name: `Bò Vàng #${newCows.length + 1}`, tag: `BV-200${newCows.length + 1}`, type: 'gold', hunger: 100 });
+    }
+
+    setInventory(newInventory);
+    setCows(newCows);
+
     try {
-      await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
-      if (itemKey === 'grass') {
-        setInventory(prev => ({ ...prev, grass: prev.grass + 20 }));
-        alert("Mua thành công +20 bó cỏ!");
-      } else if (itemKey === 'milkCow') {
-        const newCow = { id: Date.now(), name: `Bò Sữa #${cows.length + 1}`, tag: `BV-100${cows.length + 1}`, type: 'milk', hunger: 100, owner: currentUser.cccd };
-        setCows(prev => [...prev, newCow]);
-        alert("Mua thành công Bò Sữa!");
-      } else if (itemKey === 'goldCow') {
-        const newCow = { id: Date.now(), name: `Bò Vàng #${cows.length + 1}`, tag: `BV-200${cows.length + 1}`, type: 'gold', hunger: 100, owner: currentUser.cccd };
-        setCows(prev => [...prev, newCow]);
-        alert("Mua thành công Bò Vàng!");
-      }
+      await updateDoc(doc(db, 'members', currentUser.cccd), { 
+        balance: newBalance,
+        inventory: newInventory,
+        cows: newCows
+      });
+      alert("Giao dịch mua thành công!");
     } catch (err) {
       console.error(err);
+      alert("Lỗi cập nhật dữ liệu cửa hàng.");
     }
   };
 
   const sellMilk = async () => {
-    if (inventory.milk <= 0) return alert("Không có sữa!");
+    if (inventory.milk <= 0) return alert("Không có sữa trong kho!");
     const earned = inventory.milk * shopPrices.milkSellPrice;
     const newBalance = balance + earned;
-    setInventory(prev => ({ ...prev, milk: 0 }));
+    const newInventory = { ...inventory, milk: 0 };
+
+    setInventory(newInventory);
     setBalance(newBalance);
+
     try {
-      await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
+      await updateDoc(doc(db, 'members', currentUser.cccd), { 
+        balance: newBalance,
+        inventory: newInventory
+      });
       alert(`Đã bán sữa thu về +${earned.toLocaleString()}đ`);
     } catch (err) {
       console.error(err);
     }
   };
 
+  // ===== HÀNH ĐỘNG ADMIN =====
   const approveMember = async (id) => {
     await updateDoc(doc(db, 'members', id), { status: 'approved' });
-    alert("Đã duyệt!");
+    alert("Đã duyệt thành viên!");
   };
 
   const rejectMember = async (id, cccd) => {
     if (!window.confirm(`Xóa thành viên ${cccd}?`)) return;
     await deleteDoc(doc(db, 'members', id));
-    alert("Đã xóa!");
+    alert("Đã xóa thành viên!");
   };
 
   const approveDeposit = async (depId, cccd, amount) => {
     await updateDoc(doc(db, 'deposits', depId), { status: 'approved' });
     const member = members.find(m => m.cccd === cccd || m.id === cccd);
     if (member) {
-      await updateDoc(doc(db, 'members', member.id), { balance: (member.balance || 0) + amount });
+      const newBal = (member.balance || 0) + amount;
+      await updateDoc(doc(db, 'members', member.id), { balance: newBal });
     }
     alert(`Đã duyệt nạp ${amount.toLocaleString()}đ`);
   };
@@ -354,7 +391,7 @@ export default function App() {
   };
 
   const clearAllDatabase = async () => {
-    if (!window.confirm("XÓA TOÀN BỘ DỮ LIỆU?")) return;
+    if (!window.confirm("CẢNH BÁO: XÓA TOÀN BỘ DỮ LIỆU?")) return;
     for (const col of ['members', 'deposits', 'cows']) {
       const snap = await getDocs(collection(db, col));
       await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
@@ -363,7 +400,7 @@ export default function App() {
     window.location.reload();
   };
 
-  // ===== GIAO DIỆN ĐĂNG NHẬP =====
+  // ===== GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ =====
   if (authMode) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#0f172a,#1e293b)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: 'Inter,sans-serif', color: '#f1f5f9' }}>
@@ -401,7 +438,7 @@ export default function App() {
     );
   }
 
-  // ===== ADMIN =====
+  // ===== GIAO DIỆN ADMIN =====
   if (currentUser?.role === 'admin') {
     return (
       <div style={{ minHeight: '100vh', background: '#090d16', color: '#f1f5f9', fontFamily: 'Inter,sans-serif', paddingBottom: 50 }}>
@@ -482,7 +519,7 @@ export default function App() {
             </table>
           </div>
 
-          {/* Nạp tiền */}
+          {/* Lệnh nạp tiền */}
           <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>💰 Lệnh nạp tiền</h3>
           <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', overflow: 'hidden', marginBottom: 36 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -511,12 +548,12 @@ export default function App() {
             </table>
           </div>
 
-          {/* Chỉnh giá */}
+          {/* Điều chỉnh giá */}
           <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>⚙️ Điều chỉnh giá</h3>
           <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', padding: 24 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 20 }}>
               <div>
-                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Sữa (cửa hàng cũ)</label>
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Sữa</label>
                 <input type="number" value={editingPrices.milkCow?.price || 0} onChange={e => setEditingPrices({...editingPrices, milkCow: {...editingPrices.milkCow, price: Number(e.target.value)}})}
                   style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
               </div>
@@ -543,11 +580,11 @@ export default function App() {
     );
   }
 
-  // ===== USER =====
+  // ===== GIAO DIỆN USER =====
   const transferContent = `BVF${currentUser?.cccd || ''}`;
   const qrAmount = Number(depositAmount) || 0;
   const qrUrl = `https://img.vietqr.io/image/TCB-991169999999-compact2.png?amount=${qrAmount}&addInfo=${encodeURIComponent(transferContent)}&accountName=${encodeURIComponent('NGO HOANG VU')}`;
-
+  
   const mySharedCows = sharedCows.filter(c => c.owners?.some(o => o.cccd === currentUser.cccd));
   const availableSharedCows = sharedCows.filter(c => c.availableShares > 0);
 
@@ -572,11 +609,11 @@ export default function App() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 24px', gap: 8 }}>
-        <button onClick={() => setActiveTab('invest')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'invest' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'invest' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>📈 Đầu tư Bò</button>
-        <button onClick={() => setActiveTab('my')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'my' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'my' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🏡 Bò của tôi</button>
-        <button onClick={() => setActiveTab('farm')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🐄 Trang trại cá nhân</button>
-        <button onClick={() => setActiveTab('shop')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🛒 Cửa hàng</button>
+      <div style={{ display: 'flex', background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 24px', gap: 8, overflowX: 'auto' }}>
+        <button onClick={() => setActiveTab('invest')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'invest' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'invest' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>📈 Đầu tư Bò</button>
+        <button onClick={() => setActiveTab('my')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'my' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'my' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🏡 Bò của tôi</button>
+        <button onClick={() => setActiveTab('farm')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🐄 Trang trại cá nhân</button>
+        <button onClick={() => setActiveTab('shop')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🛒 Cửa hàng & Kho</button>
       </div>
 
       <div style={{ maxWidth: 1000, margin: '24px auto', padding: '0 20px' }}>
@@ -611,7 +648,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB BÒ CỦA TÔI (sở hữu chung) */}
+        {/* TAB BÒ CỦA TÔI (Sở hữu chung) */}
         {activeTab === 'my' && (
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Bò bạn đang sở hữu ({mySharedCows.length})</h3>
@@ -626,7 +663,6 @@ export default function App() {
                   const timeLeft = cow.nextHarvestAt ? Math.max(0, cow.nextHarvestAt - now) : 0;
                   const hoursLeft = Math.floor(timeLeft / 3600000);
                   const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
-
                   return (
                     <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -652,15 +688,15 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB TRANG TRẠI CÁ NHÂN (cũ) */}
+        {/* TAB TRANG TRẠI CÁ NHÂN */}
         {activeTab === 'farm' && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Đàn bò cá nhân của bạn ({cows.filter(c => c.owner === currentUser.cccd).length})</h3>
-            {cows.filter(c => c.owner === currentUser.cccd).length === 0 ? (
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Đàn bò cá nhân của bạn ({cows.length})</h3>
+            {cows.length === 0 ? (
               <div style={{ background: '#1e293b', borderRadius: 16, padding: 40, textAlign: 'center', color: '#94a3b8' }}>Bạn chưa có bò cá nhân. Hãy vào Cửa hàng để mua.</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20 }}>
-                {cows.filter(c => c.owner === currentUser.cccd).map(cow => (
+                {cows.map(cow => (
                   <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
                     <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{cow.name}</h4>
                     <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>Tag: {cow.tag}</p>
@@ -686,7 +722,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB CỬA HÀNG */}
+        {/* TAB CỬA HÀNG & KHO */}
         {activeTab === 'shop' && (
           <div>
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20, marginBottom: 24 }}>
@@ -703,7 +739,7 @@ export default function App() {
                 )}
               </div>
             </div>
-
+            
             <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🛒 Cửa hàng</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 20 }}>
               <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
