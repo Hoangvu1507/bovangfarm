@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Check, Trash2, LogOut, RefreshCw
-} from 'lucide-react';
-
+import { Check, Trash2, LogOut, RefreshCw, Plus } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
@@ -24,10 +21,13 @@ const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 const db = getFirestore(app);
 
+// ===== CẤU HÌNH BÒ SỮA =====
+const MILK_COW_PRICE = 25000000;      // 25 triệu
+const FIRST_MILK_HOURS = 48;          // 48 giờ mới cho sữa lần đầu
+const MILK_INTERVAL_HOURS = 12;       // Mỗi 12 giờ vắt 1 lần
+
 export default function App() {
-  const [authMode, setAuthMode] = useState(() => {
-    return localStorage.getItem('farm_logged_user') ? null : 'login';
-  });
+  const [authMode, setAuthMode] = useState(() => localStorage.getItem('farm_logged_user') ? null : 'login');
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('farm_logged_user');
     return saved ? JSON.parse(saved) : null;
@@ -35,18 +35,11 @@ export default function App() {
 
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-
-  const [regForm, setRegForm] = useState({
-    fullName: '',
-    cccd: '',
-    password: '',
-    dob: '',
-    phone: '',
-    address: ''
-  });
+  const [regForm, setRegForm] = useState({ fullName: '', cccd: '', password: '', dob: '', phone: '', address: '' });
 
   const [members, setMembers] = useState([]);
   const [pendingDeposits, setPendingDeposits] = useState([]);
+  const [sharedCows, setSharedCows] = useState([]); // bò sở hữu chung
   const [shopPrices, setShopPrices] = useState({
     milkCow: { name: 'Bò Sữa Cao Sản', price: 300000, desc: 'Cho sữa tươi định kỳ hàng ngày.' },
     goldCow: { name: 'Bò Vàng Giống', price: 500000, desc: 'Sinh sản bò con, gia tăng tài sản.' },
@@ -57,60 +50,51 @@ export default function App() {
 
   const [balance, setBalance] = useState(0);
   const [activeTab, setActiveTab] = useState('farm');
-  const [inventory, setInventory] = useState({
-    grass: 0,
-    milk: 0,
-    medicine: 0
-  });
-  const [cows, setCows] = useState([]);
+  const [inventory, setInventory] = useState({ grass: 0, milk: 0, medicine: 0 });
+  const [cows, setCows] = useState([]); // bò cá nhân cũ
 
-  // State nạp tiền
+  // Nạp tiền
   const [depositAmount, setDepositAmount] = useState('');
   const [showDepositModal, setShowDepositModal] = useState(false);
 
+  // Admin tạo bò
+  const [newCowName, setNewCowName] = useState('');
+
   useEffect(() => {
-    const unsubMembers = onSnapshot(collection(db, 'members'), (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMembers(list);
+    const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
+      setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-
-    const unsubDeposits = onSnapshot(collection(db, 'deposits'), (snapshot) => {
-      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPendingDeposits(list);
+    const unsubDeposits = onSnapshot(collection(db, 'deposits'), (snap) => {
+      setPendingDeposits(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-
-    const unsubPrices = onSnapshot(doc(db, 'settings', 'prices'), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setShopPrices(data);
-        setEditingPrices(data);
+    const unsubSharedCows = onSnapshot(collection(db, 'cows'), (snap) => {
+      setSharedCows(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubPrices = onSnapshot(doc(db, 'settings', 'prices'), (snap) => {
+      if (snap.exists()) {
+        setShopPrices(snap.data());
+        setEditingPrices(snap.data());
       } else {
-        const initialPrices = {
+        const initial = {
           milkCow: { name: 'Bò Sữa Cao Sản', price: 300000, desc: 'Cho sữa tươi định kỳ hàng ngày.' },
           goldCow: { name: 'Bò Vàng Giống', price: 500000, desc: 'Sinh sản bò con, gia tăng tài sản.' },
           grass: { name: 'Gói 20 Bó Cỏ', price: 50000, desc: 'Thức ăn dinh dưỡng cho đàn bò.' },
           milkSellPrice: 25000
         };
-        setDoc(doc(db, 'settings', 'prices'), initialPrices);
+        setDoc(doc(db, 'settings', 'prices'), initial);
       }
     });
-
-    return () => {
-      unsubMembers();
-      unsubDeposits();
-      unsubPrices();
-    };
+    return () => { unsubMembers(); unsubDeposits(); unsubSharedCows(); unsubPrices(); };
   }, []);
 
   useEffect(() => {
-    if (currentUser && currentUser.role === 'user') {
+    if (currentUser?.role === 'user') {
       const me = members.find(m => m.cccd === currentUser.cccd || m.id === currentUser.cccd);
-      if (me) {
-        setBalance(me.balance || 0);
-      }
+      if (me) setBalance(me.balance || 0);
     }
   }, [members, currentUser]);
 
+  // ===== AUTH =====
   const handleLogin = (e) => {
     e.preventDefault();
     if (loginUsername === '001098000393' && loginPassword === 'Phuongthao97@@') {
@@ -120,51 +104,33 @@ export default function App() {
       setAuthMode(null);
       return;
     }
-
     const found = members.find(m => (m.cccd === loginUsername || m.id === loginUsername) && m.password === loginPassword);
     if (found) {
-      if (found.status !== 'approved') {
-        alert("Tài khoản của bạn đang chờ Quản Trị Viên phê duyệt. Vui lòng quay lại sau!");
-        return;
-      }
+      if (found.status !== 'approved') return alert("Tài khoản đang chờ phê duyệt!");
       const userData = { role: 'user', ...found };
       setCurrentUser(userData);
       localStorage.setItem('farm_logged_user', JSON.stringify(userData));
       setBalance(found.balance || 0);
       setAuthMode(null);
     } else {
-      alert("Sai số CCCD hoặc mật khẩu, hoặc tài khoản chưa được duyệt!");
+      alert("Sai CCCD hoặc mật khẩu!");
     }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
     const cleanCccd = regForm.cccd.trim();
-    if (!cleanCccd || !regForm.fullName || !regForm.password) {
-      alert("Vui lòng điền đầy đủ các thông tin bắt buộc!");
-      return;
-    }
-    if (cleanCccd === '001098000393') {
-      alert("Số CCCD này trùng với tài khoản quản trị hệ thống!");
-      return;
-    }
-
+    if (!cleanCccd || !regForm.fullName || !regForm.password) return alert("Điền đầy đủ thông tin!");
+    if (cleanCccd === '001098000393') return alert("CCCD trùng admin!");
     try {
       const docRef = doc(db, 'members', cleanCccd);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        alert(`Số CCCD (${cleanCccd}) này đã tồn tại trên Cloud!`);
-        return;
-      }
-
-      const newMember = { ...regForm, cccd: cleanCccd, balance: 0, status: 'pending' };
-      await setDoc(docRef, newMember);
-      alert("Đăng ký thành công! Hồ sơ đã được đồng bộ lên Cloud để Admin phê duyệt.");
+      if ((await getDoc(docRef)).exists()) return alert("CCCD đã tồn tại!");
+      await setDoc(docRef, { ...regForm, cccd: cleanCccd, balance: 0, status: 'pending' });
+      alert("Đăng ký thành công! Chờ Admin duyệt.");
       setAuthMode('login');
       setRegForm({ fullName: '', cccd: '', password: '', dob: '', phone: '', address: '' });
-    } catch (error) {
-      console.error(error);
-      alert("Đăng ký thất bại, vui lòng kiểm tra kết nối mạng.");
+    } catch (err) {
+      alert("Đăng ký thất bại!");
     }
   };
 
@@ -174,32 +140,137 @@ export default function App() {
     setAuthMode('login');
   };
 
-  const clearAllDatabase = async () => {
-    if (!window.confirm("CẢNH BÁO: Bạn có chắc chắn muốn xóa toàn bộ dữ liệu trên Cloud không?")) return;
+  // ===== NẠP TIỀN =====
+  const requestDeposit = async () => {
+    const amount = Number(depositAmount);
+    if (!amount || amount < 10000) return alert("Tối thiểu 10.000đ");
     try {
-      const memberSnapshot = await getDocs(collection(db, 'members'));
-      const deleteMemberPromises = memberSnapshot.docs.map(d => deleteDoc(doc(db, 'members', d.id)));
-
-      const depositSnapshot = await getDocs(collection(db, 'deposits'));
-      const deleteDepositPromises = depositSnapshot.docs.map(d => deleteDoc(doc(db, 'deposits', d.id)));
-
-      await Promise.all([...deleteMemberPromises, ...deleteDepositPromises]);
-      localStorage.clear();
-      setCurrentUser(null);
-      setAuthMode('login');
-      alert("Đã xóa sạch toàn bộ dữ liệu trên Cloud thành công!");
-      window.location.reload();
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi xảy ra khi xóa dữ liệu.");
+      await addDoc(collection(db, 'deposits'), {
+        cccd: currentUser.cccd,
+        amount,
+        time: new Date().toLocaleString('vi-VN'),
+        status: 'pending',
+        fullName: currentUser.fullName
+      });
+      alert("Đã gửi yêu cầu nạp tiền! Chờ Admin xác nhận.");
+      setDepositAmount('');
+      setShowDepositModal(false);
+    } catch (err) {
+      alert("Lỗi gửi yêu cầu!");
     }
   };
 
-  const feedCow = (cowId) => {
-    if (inventory.grass <= 0) {
-      alert("Bạn đã hết cỏ trong kho! Vui lòng ghé Cửa hàng để mua thêm cỏ.");
-      return;
+  // ===== ADMIN: TẠO BÒ SỞ HỮU CHUNG =====
+  const createSharedCow = async () => {
+    if (!newCowName.trim()) return alert("Nhập tên bò!");
+    try {
+      await addDoc(collection(db, 'cows'), {
+        name: newCowName.trim(),
+        type: 'milk',
+        totalPrice: MILK_COW_PRICE,
+        totalShares: 100,
+        availableShares: 100,
+        owners: [],
+        status: 'available',
+        createdAt: Date.now(),
+        firstMilkAt: null,
+        lastHarvestAt: null,
+        nextHarvestAt: null
+      });
+      alert("Tạo bò thành công!");
+      setNewCowName('');
+    } catch (err) {
+      alert("Lỗi tạo bò!");
     }
+  };
+
+  // ===== USER: MUA CỔ PHẦN =====
+  const buyShares = async (cow, percent) => {
+    if (cow.availableShares < percent) return alert("Không đủ cổ phần trống!");
+    const cost = Math.round(MILK_COW_PRICE * percent / 100);
+    if (balance < cost) return alert("Số dư không đủ! Vui lòng nạp thêm tiền.");
+
+    const myOwnership = cow.owners?.find(o => o.cccd === currentUser.cccd);
+    const currentPercent = myOwnership ? myOwnership.percent : 0;
+    if (currentPercent + percent > 100) return alert("Bạn không thể sở hữu quá 100%!");
+
+    try {
+      const newBalance = balance - cost;
+      await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
+      setBalance(newBalance);
+
+      const newOwners = [...(cow.owners || [])];
+      const existIdx = newOwners.findIndex(o => o.cccd === currentUser.cccd);
+      if (existIdx >= 0) {
+        newOwners[existIdx].percent += percent;
+        newOwners[existIdx].shares += percent;
+        newOwners[existIdx].invested += cost;
+      } else {
+        newOwners.push({
+          cccd: currentUser.cccd,
+          fullName: currentUser.fullName,
+          percent,
+          shares: percent,
+          invested: cost,
+          joinedAt: Date.now()
+        });
+      }
+
+      const updates = {
+        availableShares: cow.availableShares - percent,
+        owners: newOwners,
+        status: cow.availableShares - percent <= 0 ? 'full' : 'available'
+      };
+
+      if (!cow.firstMilkAt) {
+        updates.firstMilkAt = Date.now() + FIRST_MILK_HOURS * 60 * 60 * 1000;
+        updates.nextHarvestAt = updates.firstMilkAt;
+      }
+
+      await updateDoc(doc(db, 'cows', cow.id), updates);
+      alert(`Mua thành công ${percent}% bò "${cow.name}"\nSố tiền: ${cost.toLocaleString()}đ`);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi mua cổ phần!");
+    }
+  };
+
+  // ===== VẮT SỮA + CHIA TIỀN =====
+  const harvestSharedMilk = async (cow) => {
+    const now = Date.now();
+    if (!cow.nextHarvestAt || now < cow.nextHarvestAt) {
+      return alert("Chưa đến giờ vắt sữa!");
+    }
+
+    const liters = Math.floor(Math.random() * 5) + 5; // 5-9 lít
+    const totalMoney = liters * (shopPrices.milkSellPrice || 25000);
+
+    try {
+      for (const owner of cow.owners || []) {
+        const shareMoney = Math.floor(totalMoney * owner.percent / 100);
+        const memberRef = doc(db, 'members', owner.cccd);
+        const memberSnap = await getDoc(memberRef);
+        if (memberSnap.exists()) {
+          const currentBal = memberSnap.data().balance || 0;
+          await updateDoc(memberRef, { balance: currentBal + shareMoney });
+        }
+      }
+
+      await updateDoc(doc(db, 'cows', cow.id), {
+        lastHarvestAt: now,
+        nextHarvestAt: now + MILK_INTERVAL_HOURS * 60 * 60 * 1000
+      });
+
+      alert(`Vắt sữa thành công!\nSản lượng: ${liters} lít\nTổng tiền: ${totalMoney.toLocaleString()}đ\nĐã chia theo tỷ lệ sở hữu.`);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi vắt sữa!");
+    }
+  };
+
+  // ===== CÁC HÀM CŨ =====
+  const feedCow = (cowId) => {
+    if (inventory.grass <= 0) return alert("Bạn đã hết cỏ!");
     setInventory(prev => ({ ...prev, grass: prev.grass - 1 }));
     setCows(prev => prev.map(c => c.id === cowId ? { ...c, hunger: Math.min(100, c.hunger + 25) } : c));
     alert("Đã cho bò ăn cỏ!");
@@ -207,17 +278,11 @@ export default function App() {
 
   const harvestMilk = (cowId) => {
     const cow = cows.find(c => c.id === cowId);
-    if (cow.type !== 'milk') {
-      alert("Chỉ có Bò Sữa Cao Sản mới có thể cho sữa!");
-      return;
-    }
-    if (cow.hunger < 40) {
-      alert("Bò đang đói, hãy cho bò ăn cỏ trước!");
-      return;
-    }
+    if (cow.type !== 'milk') return alert("Chỉ bò sữa mới cho sữa!");
+    if (cow.hunger < 40) return alert("Bò đang đói!");
     setInventory(prev => ({ ...prev, milk: prev.milk + 5 }));
     setCows(prev => prev.map(c => c.id === cowId ? { ...c, hunger: Math.max(10, c.hunger - 30) } : c));
-    alert("Thu hoạch thành công +5 Lít Sữa tươi vào kho!");
+    alert("Thu hoạch +5 lít sữa!");
   };
 
   const buyItem = async (itemKey) => {
@@ -225,29 +290,23 @@ export default function App() {
     if (itemKey === 'milkCow') cost = shopPrices.milkCow.price;
     if (itemKey === 'goldCow') cost = shopPrices.goldCow.price;
     if (itemKey === 'grass') cost = shopPrices.grass.price;
-
-    if (balance < cost) {
-      alert("Số dư tài khoản không đủ! Vui lòng nạp thêm tiền.");
-      return;
-    }
+    if (balance < cost) return alert("Số dư không đủ!");
 
     const newBalance = balance - cost;
     setBalance(newBalance);
-
     try {
       await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
-
       if (itemKey === 'grass') {
         setInventory(prev => ({ ...prev, grass: prev.grass + 20 }));
-        alert("Mua thành công +20 Bó Cỏ!");
+        alert("Mua thành công +20 bó cỏ!");
       } else if (itemKey === 'milkCow') {
-        const newCow = { id: Date.now(), name: `Bò Sữa Cao Sản #${cows.length + 1}`, tag: `BV-100${cows.length + 1}`, type: 'milk', hunger: 100, owner: currentUser.cccd };
+        const newCow = { id: Date.now(), name: `Bò Sữa #${cows.length + 1}`, tag: `BV-100${cows.length + 1}`, type: 'milk', hunger: 100, owner: currentUser.cccd };
         setCows(prev => [...prev, newCow]);
-        alert("Mua thành công Bò Sữa Cao Sản!");
+        alert("Mua thành công Bò Sữa!");
       } else if (itemKey === 'goldCow') {
-        const newCow = { id: Date.now(), name: `Bò Vàng Giống #${cows.length + 1}`, tag: `BV-200${cows.length + 1}`, type: 'gold', hunger: 100, owner: currentUser.cccd };
+        const newCow = { id: Date.now(), name: `Bò Vàng #${cows.length + 1}`, tag: `BV-200${cows.length + 1}`, type: 'gold', hunger: 100, owner: currentUser.cccd };
         setCows(prev => [...prev, newCow]);
-        alert("Mua thành công Bò Vàng Giống!");
+        alert("Mua thành công Bò Vàng!");
       }
     } catch (err) {
       console.error(err);
@@ -255,422 +314,86 @@ export default function App() {
   };
 
   const sellMilk = async () => {
-    if (inventory.milk <= 0) {
-      alert("Không có sữa để bán!");
-      return;
-    }
-    const litersToSell = inventory.milk;
-    const earnedMoney = litersToSell * shopPrices.milkSellPrice;
-    const newBalance = balance + earnedMoney;
-
+    if (inventory.milk <= 0) return alert("Không có sữa!");
+    const earned = inventory.milk * shopPrices.milkSellPrice;
+    const newBalance = balance + earned;
     setInventory(prev => ({ ...prev, milk: 0 }));
     setBalance(newBalance);
-
     try {
       await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
-      alert(`Đã bán ${litersToSell} lít sữa thu về +${earnedMoney.toLocaleString()} đ!`);
+      alert(`Đã bán sữa thu về +${earned.toLocaleString()}đ`);
     } catch (err) {
       console.error(err);
     }
   };
 
-  // ===== HÀM NẠP TIỀN =====
-  const requestDeposit = async () => {
-    const amount = Number(depositAmount);
-    if (!amount || amount < 10000) {
-      alert("Số tiền nạp tối thiểu là 10.000đ");
-      return;
-    }
-
-    try {
-      await addDoc(collection(db, 'deposits'), {
-        cccd: currentUser.cccd,
-        amount: amount,
-        time: new Date().toLocaleString('vi-VN'),
-        status: 'pending',
-        fullName: currentUser.fullName
-      });
-
-      alert("Đã gửi yêu cầu nạp tiền thành công!\nVui lòng chuyển khoản theo QR hoặc thông tin bên dưới và chờ Admin xác nhận.");
-      setDepositAmount('');
-      setShowDepositModal(false);
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi xảy ra, vui lòng thử lại.");
-    }
+  const approveMember = async (id) => {
+    await updateDoc(doc(db, 'members', id), { status: 'approved' });
+    alert("Đã duyệt!");
   };
 
-  const approveMember = async (memberId) => {
-    try {
-      await updateDoc(doc(db, 'members', memberId), { status: 'approved' });
-      alert(`Đã phê duyệt thành viên ID: ${memberId}`);
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi khi phê duyệt thành viên.");
-    }
+  const rejectMember = async (id, cccd) => {
+    if (!window.confirm(`Xóa thành viên ${cccd}?`)) return;
+    await deleteDoc(doc(db, 'members', id));
+    alert("Đã xóa!");
   };
 
-  const rejectMember = async (memberId, cccdDisplay) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa tài khoản CCCD: ${cccdDisplay || memberId} không?`)) return;
-
-    try {
-      await deleteDoc(doc(db, 'members', memberId));
-
-      const depositsSnap = await getDocs(collection(db, 'deposits'));
-      const deleteDepositPromises = depositsSnap.docs
-        .filter(d => d.data().cccd === (cccdDisplay || memberId))
-        .map(d => deleteDoc(doc(db, 'deposits', d.id)));
-
-      await Promise.all(deleteDepositPromises);
-
-      alert(`Đã xóa thành viên: ${cccdDisplay || memberId}`);
-    } catch (error) {
-      console.error("Lỗi khi xóa thành viên:", error);
-      alert("Có lỗi khi xóa thành viên.");
+  const approveDeposit = async (depId, cccd, amount) => {
+    await updateDoc(doc(db, 'deposits', depId), { status: 'approved' });
+    const member = members.find(m => m.cccd === cccd || m.id === cccd);
+    if (member) {
+      await updateDoc(doc(db, 'members', member.id), { balance: (member.balance || 0) + amount });
     }
-  };
-
-  const approveDeposit = async (depositId, cccd, amount) => {
-    try {
-      await updateDoc(doc(db, 'deposits', depositId), { status: 'approved' });
-      const targetMember = members.find(m => m.cccd === cccd || m.id === cccd);
-      if (targetMember) {
-        const newBalance = (targetMember.balance || 0) + amount;
-        await updateDoc(doc(db, 'members', targetMember.id), { balance: newBalance });
-      }
-      alert(`Đã duyệt nạp ${amount.toLocaleString()} đ cho CCCD: ${cccd}`);
-    } catch (error) {
-      console.error(error);
-    }
+    alert(`Đã duyệt nạp ${amount.toLocaleString()}đ`);
   };
 
   const saveNewPrices = async () => {
-    try {
-      await setDoc(doc(db, 'settings', 'prices'), editingPrices);
-      setShopPrices(editingPrices);
-      alert("Đã cập nhật bảng giá mới trên Cloud!");
-    } catch (error) {
-      console.error(error);
-      alert("Có lỗi khi cập nhật bảng giá.");
+    await setDoc(doc(db, 'settings', 'prices'), editingPrices);
+    setShopPrices(editingPrices);
+    alert("Đã cập nhật bảng giá!");
+  };
+
+  const clearAllDatabase = async () => {
+    if (!window.confirm("XÓA TOÀN BỘ DỮ LIỆU?")) return;
+    for (const col of ['members', 'deposits', 'cows']) {
+      const snap = await getDocs(collection(db, col));
+      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, col, d.id))));
     }
+    localStorage.clear();
+    window.location.reload();
   };
 
-  const manualReloadData = () => {
-    alert("Dữ liệu đang được đồng bộ realtime tự động qua Cloud Firestore!");
-  };
-
-  // ===== GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ =====
+  // ===== GIAO DIỆN ĐĂNG NHẬP =====
   if (authMode) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px',
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-        color: '#f1f5f9'
-      }}>
-        <div style={{
-          background: '#1e293b',
-          border: '1px solid #334155',
-          borderRadius: '24px',
-          padding: '40px 36px',
-          width: '100%',
-          maxWidth: '460px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-        }}>
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-            <div style={{
-              width: '72px',
-              height: '72px',
-              background: 'linear-gradient(135deg, #10b981, #059669)',
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '36px',
-              margin: '0 auto 16px',
-              boxShadow: '0 10px 25px rgba(16, 185, 129, 0.3)'
-            }}>
-              🐄
-            </div>
-            <h1 style={{ fontSize: '24px', fontWeight: '800', margin: '0 0 6px 0', color: '#fff' }}>
-              Bò Vàng Farm O2O
-            </h1>
-            <p style={{ fontSize: '14px', color: '#94a3b8', margin: 0 }}>
-              Hệ thống Quản lý Chăn nuôi Thông minh
-            </p>
+      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#0f172a,#1e293b)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: 'Inter,sans-serif', color: '#f1f5f9' }}>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 24, padding: '40px 36px', width: '100%', maxWidth: 460 }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ fontSize: 42, marginBottom: 12 }}>🐄</div>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0 }}>Bò Vàng Farm O2O</h1>
+            <p style={{ color: '#94a3b8', marginTop: 6 }}>Hệ thống Quản lý Chăn nuôi Thông minh</p>
           </div>
-
-          <div style={{
-            display: 'flex',
-            background: '#0f172a',
-            padding: '5px',
-            borderRadius: '14px',
-            marginBottom: '28px',
-            border: '1px solid #334155'
-          }}>
-            <button
-              onClick={() => setAuthMode('login')}
-              style={{
-                flex: 1,
-                padding: '11px',
-                background: authMode === 'login' ? '#10b981' : 'transparent',
-                color: authMode === 'login' ? '#fff' : '#94a3b8',
-                border: 'none',
-                borderRadius: '10px',
-                fontWeight: '700',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              Đăng Nhập
-            </button>
-            <button
-              onClick={() => setAuthMode('register')}
-              style={{
-                flex: 1,
-                padding: '11px',
-                background: authMode === 'register' ? '#10b981' : 'transparent',
-                color: authMode === 'register' ? '#fff' : '#94a3b8',
-                border: 'none',
-                borderRadius: '10px',
-                fontWeight: '700',
-                fontSize: '14px',
-                cursor: 'pointer'
-              }}
-            >
-              Đăng Ký Thành Viên
-            </button>
+          <div style={{ display: 'flex', background: '#0f172a', padding: 5, borderRadius: 14, marginBottom: 28 }}>
+            <button onClick={() => setAuthMode('login')} style={{ flex: 1, padding: 11, background: authMode === 'login' ? '#10b981' : 'transparent', color: authMode === 'login' ? '#fff' : '#94a3b8', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Đăng Nhập</button>
+            <button onClick={() => setAuthMode('register')} style={{ flex: 1, padding: 11, background: authMode === 'register' ? '#10b981' : 'transparent', color: authMode === 'register' ? '#fff' : '#94a3b8', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Đăng Ký</button>
           </div>
-
           {authMode === 'login' ? (
-            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
-                  Số CCCD / Tài khoản Admin
-                </label>
-                <input
-                  type="text"
-                  placeholder="Nhập số CCCD của bạn"
-                  value={loginUsername}
-                  onChange={e => setLoginUsername(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '13px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '15px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
-                  Mật khẩu
-                </label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={e => setLoginPassword(e.target.value)}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '13px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '15px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '15px',
-                  borderRadius: '14px',
-                  fontWeight: '700',
-                  fontSize: '15px',
-                  cursor: 'pointer',
-                  marginTop: '8px',
-                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
-                }}
-              >
-                Đăng Nhập Hệ Thống
-              </button>
+            <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <input type="text" placeholder="Số CCCD / Admin" value={loginUsername} onChange={e => setLoginUsername(e.target.value)} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '13px 16px', borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <input type="password" placeholder="Mật khẩu" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '13px 16px', borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <button type="submit" style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: 15, borderRadius: 14, fontWeight: 700, cursor: 'pointer' }}>Đăng Nhập</button>
             </form>
           ) : (
-            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Họ và Tên</label>
-                <input
-                  type="text"
-                  placeholder="Nguyễn Văn A"
-                  value={regForm.fullName}
-                  onChange={e => setRegForm({ ...regForm, fullName: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
+            <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <input type="text" placeholder="Họ và Tên" value={regForm.fullName} onChange={e => setRegForm({...regForm, fullName: e.target.value})} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <input type="text" placeholder="Số CCCD" value={regForm.cccd} onChange={e => setRegForm({...regForm, cccd: e.target.value})} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <input type="password" placeholder="Mật khẩu" value={regForm.password} onChange={e => setRegForm({...regForm, password: e.target.value})} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <div style={{ display: 'flex', gap: 12 }}>
+                <input type="date" value={regForm.dob} onChange={e => setRegForm({...regForm, dob: e.target.value})} required style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+                <input type="text" placeholder="SĐT" value={regForm.phone} onChange={e => setRegForm({...regForm, phone: e.target.value})} required style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
               </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>
-                  Số CCCD <span style={{ color: '#94a3b8', fontWeight: '400' }}>(dùng làm tên đăng nhập)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="001098xxxxxx"
-                  value={regForm.cccd}
-                  onChange={e => setRegForm({ ...regForm, cccd: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Mật khẩu</label>
-                <input
-                  type="password"
-                  placeholder="Tối thiểu 6 ký tự"
-                  value={regForm.password}
-                  onChange={e => setRegForm({ ...regForm, password: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: '14px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Ngày Sinh</label>
-                  <input
-                    type="date"
-                    value={regForm.dob}
-                    onChange={e => setRegForm({ ...regForm, dob: e.target.value })}
-                    style={{
-                      width: '100%',
-                      background: '#0f172a',
-                      border: '1px solid #334155',
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontSize: '14px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                    required
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Số Điện Thoại</label>
-                  <input
-                    type="text"
-                    placeholder="0909xxxxxx"
-                    value={regForm.phone}
-                    onChange={e => setRegForm({ ...regForm, phone: e.target.value })}
-                    style={{
-                      width: '100%',
-                      background: '#0f172a',
-                      border: '1px solid #334155',
-                      padding: '12px 14px',
-                      borderRadius: '12px',
-                      color: '#fff',
-                      fontSize: '14px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '7px' }}>Địa Chỉ Thường Trú</label>
-                <input
-                  type="text"
-                  placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"
-                  value={regForm.address}
-                  onChange={e => setRegForm({ ...regForm, address: e.target.value })}
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    border: '1px solid #334155',
-                    padding: '12px 16px',
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                style={{
-                  width: '100%',
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '15px',
-                  borderRadius: '14px',
-                  fontWeight: '700',
-                  fontSize: '15px',
-                  cursor: 'pointer',
-                  marginTop: '10px',
-                  boxShadow: '0 8px 20px rgba(16, 185, 129, 0.35)'
-                }}
-              >
-                Gửi Hồ Sơ Đăng Ký
-              </button>
-
-              <p style={{ textAlign: 'center', fontSize: '12px', color: '#64748b', margin: '8px 0 0 0' }}>
-                Hồ sơ sẽ được gửi lên Cloud để Admin phê duyệt
-              </p>
+              <input type="text" placeholder="Địa chỉ" value={regForm.address} onChange={e => setRegForm({...regForm, address: e.target.value})} required style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <button type="submit" style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: 14, borderRadius: 14, fontWeight: 700, cursor: 'pointer' }}>Gửi Hồ Sơ Đăng Ký</button>
             </form>
           )}
         </div>
@@ -678,323 +401,282 @@ export default function App() {
     );
   }
 
-  // ===== ADMIN PANEL =====
-  if (currentUser && currentUser.role === 'admin') {
-    const pendingMembersCount = members.filter(m => m.status === 'pending').length;
-
+  // ===== ADMIN =====
+  if (currentUser?.role === 'admin') {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f1f5f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", paddingBottom: '50px' }}>
+      <div style={{ minHeight: '100vh', background: '#090d16', color: '#f1f5f9', fontFamily: 'Inter,sans-serif', paddingBottom: 50 }}>
         <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ background: '#dc2626', color: '#fff', padding: '8px 12px', borderRadius: '10px', fontWeight: '800', fontSize: '12px' }}>ADMIN DASHBOARD</div>
-            <h1 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>Quản Trị Hệ Thống Bò Vàng Farm</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ background: '#dc2626', color: '#fff', padding: '8px 12px', borderRadius: 10, fontWeight: 800, fontSize: 12 }}>ADMIN</div>
+            <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Quản Trị Bò Vàng Farm</h1>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button
-              onClick={clearAllDatabase}
-              style={{ background: '#7f1d1d', color: '#fca5a5', border: '1px solid #991b1b', padding: '8px 14px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
-            >
-              🗑️ Xóa Cloud Database
-            </button>
-            <button
-              onClick={handleLogout}
-              style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <LogOut size={14} /> Đăng Xuất
-            </button>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button onClick={clearAllDatabase} style={{ background: '#7f1d1d', color: '#fca5a5', border: '1px solid #991b1b', padding: '8px 14px', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Xóa Database</button>
+            <button onClick={handleLogout} style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><LogOut size={14} /> Đăng Xuất</button>
           </div>
         </div>
 
-        <div style={{ maxWidth: '1150px', margin: '28px auto', padding: '0 24px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '17px', fontWeight: '800', margin: 0 }}>
-              👥 Quản Lý & Phê Duyệt Thành Viên ({pendingMembersCount} chờ duyệt)
-            </h3>
-            <button
-              onClick={manualReloadData}
-              style={{ background: '#334155', color: '#34d399', border: '1px solid #475569', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}
-            >
-              <RefreshCw size={13} /> Cloud Realtime Active
-            </button>
+        <div style={{ maxWidth: 1150, margin: '28px auto', padding: '0 24px' }}>
+          {/* Tạo bò sở hữu chung */}
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', padding: 24, marginBottom: 32 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 800 }}>➕ Tạo Bò Sữa Sở Hữu Chung (25.000.000đ)</h3>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <input type="text" placeholder="Tên bò (VD: Bò Sữa #01)" value={newCowName} onChange={e => setNewCowName(e.target.value)}
+                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', padding: '12px 16px', borderRadius: 12, color: '#fff', boxSizing: 'border-box' }} />
+              <button onClick={createSharedCow} style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={18} /> Tạo Bò
+              </button>
+            </div>
           </div>
 
-          <div style={{ background: '#1e293b', borderRadius: '20px', border: '1px solid #334155', overflow: 'hidden', marginBottom: '36px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          {/* Danh sách bò sở hữu chung */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>🐄 Bò Sở Hữu Chung ({sharedCows.length})</h3>
+          <div style={{ display: 'grid', gap: 16, marginBottom: 36 }}>
+            {sharedCows.length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }}>Chưa có bò nào</div>
+            ) : sharedCows.map(cow => (
+              <div key={cow.id} style={{ background: '#1e293b', borderRadius: 16, border: '1px solid #334155', padding: 20 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{cow.name}</h4>
+                  <span style={{ background: cow.availableShares === 0 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: cow.availableShares === 0 ? '#34d399' : '#fbbf24', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                    {cow.availableShares === 0 ? 'Đã bán hết' : `Còn ${cow.availableShares}%`}
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: '#94a3b8' }}>Giá trị: {cow.totalPrice?.toLocaleString()}đ</p>
+                {cow.owners?.length > 0 && (
+                  <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1' }}>
+                    Chủ sở hữu: {cow.owners.map(o => `${o.fullName} (${o.percent}%)`).join(' · ')}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Thành viên */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>👥 Thành viên</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', overflow: 'hidden', marginBottom: 36 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px' }}>
-                  <th style={{ padding: '14px 18px' }}>Họ và Tên</th>
-                  <th style={{ padding: '14px 18px' }}>Số CCCD (Login)</th>
-                  <th style={{ padding: '14px 18px' }}>SĐT / Địa Chỉ</th>
-                  <th style={{ padding: '14px 18px' }}>Trạng Thái</th>
-                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Hành Động</th>
+                <tr style={{ background: '#0f172a', color: '#94a3b8' }}>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Họ tên</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>CCCD</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Trạng thái</th>
+                  <th style={{ padding: 14, textAlign: 'right' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {members.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Không có thành viên nào trên Cloud.</td>
+                {members.map(m => (
+                  <tr key={m.id} style={{ borderTop: '1px solid #334155' }}>
+                    <td style={{ padding: 14 }}>{m.fullName}</td>
+                    <td style={{ padding: 14, color: '#34d399', fontFamily: 'monospace' }}>{m.cccd}</td>
+                    <td style={{ padding: 14 }}>
+                      <span style={{ background: m.status === 'approved' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: m.status === 'approved' ? '#34d399' : '#fbbf24', padding: '4px 10px', borderRadius: 20, fontSize: 12 }}>{m.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt'}</span>
+                    </td>
+                    <td style={{ padding: 14, textAlign: 'right' }}>
+                      {m.status !== 'approved' && <button onClick={() => approveMember(m.id)} style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, marginRight: 8, cursor: 'pointer' }}>Duyệt</button>}
+                      <button onClick={() => rejectMember(m.id, m.cccd)} style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Xóa</button>
+                    </td>
                   </tr>
-                ) : (
-                  members.map((m) => (
-                    <tr key={m.id} style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.4)' }}>
-                      <td style={{ padding: '14px 18px', fontWeight: '700', color: '#fff' }}>{m.fullName}</td>
-                      <td style={{ padding: '14px 18px', color: '#34d399', fontFamily: 'monospace', fontWeight: '600' }}>{m.cccd || m.id}</td>
-                      <td style={{ padding: '14px 18px', color: '#cbd5e1' }}>{m.phone} - {m.address}</td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{
-                          background: m.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: m.status === 'approved' ? '#34d399' : '#fbbf24',
-                          padding: '5px 12px',
-                          borderRadius: '20px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          {m.status === 'approved' ? 'Đã kích hoạt' : 'Chờ duyệt'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                          {m.status !== 'approved' && (
-                            <button
-                              onClick={() => approveMember(m.id)}
-                              style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
-                            >
-                              <Check size={14} /> Duyệt
-                            </button>
-                          )}
-                          <button
-                            onClick={() => rejectMember(m.id, m.cccd)}
-                            style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}
-                          >
-                            <Trash2 size={14} /> Xóa
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
 
-          <h3 style={{ fontSize: '17px', fontWeight: '800', marginBottom: '14px' }}>💰 Phê Duyệt Lệnh Nạp Tiền Của User</h3>
-          <div style={{ background: '#1e293b', borderRadius: '20px', border: '1px solid #334155', overflow: 'hidden', marginBottom: '36px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+          {/* Nạp tiền */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>💰 Lệnh nạp tiền</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', overflow: 'hidden', marginBottom: 36 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ background: '#0f172a', borderBottom: '1px solid #334155', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', fontSize: '11px' }}>
-                  <th style={{ padding: '14px 18px' }}>Mã CCCD User</th>
-                  <th style={{ padding: '14px 18px' }}>Số Tiền Nạp</th>
-                  <th style={{ padding: '14px 18px' }}>Thời Gian</th>
-                  <th style={{ padding: '14px 18px' }}>Trạng Thái</th>
-                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Thao Tác</th>
+                <tr style={{ background: '#0f172a', color: '#94a3b8' }}>
+                  <th style={{ padding: 14, textAlign: 'left' }}>CCCD</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Số tiền</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Thời gian</th>
+                  <th style={{ padding: 14, textAlign: 'right' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingDeposits.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>Không có lệnh nạp tiền nào đang chờ.</td>
+                {pendingDeposits.filter(d => d.status === 'pending').length === 0 ? (
+                  <tr><td colSpan="4" style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Không có lệnh chờ</td></tr>
+                ) : pendingDeposits.filter(d => d.status === 'pending').map(dep => (
+                  <tr key={dep.id} style={{ borderTop: '1px solid #334155' }}>
+                    <td style={{ padding: 14, fontFamily: 'monospace', color: '#34d399' }}>{dep.cccd}</td>
+                    <td style={{ padding: 14, color: '#fbbf24', fontWeight: 700 }}>+{Number(dep.amount).toLocaleString()}đ</td>
+                    <td style={{ padding: 14 }}>{dep.time}</td>
+                    <td style={{ padding: 14, textAlign: 'right' }}>
+                      <button onClick={() => approveDeposit(dep.id, dep.cccd, dep.amount)} style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>Xác nhận</button>
+                    </td>
                   </tr>
-                ) : (
-                  pendingDeposits.map((dep) => (
-                    <tr key={dep.id} style={{ borderBottom: '1px solid rgba(51, 65, 85, 0.4)' }}>
-                      <td style={{ padding: '14px 18px', fontFamily: 'monospace', color: '#34d399', fontWeight: '700' }}>{dep.cccd}</td>
-                      <td style={{ padding: '14px 18px', color: '#fbbf24', fontWeight: '800' }}>+{Number(dep.amount).toLocaleString()} đ</td>
-                      <td style={{ padding: '14px 18px', color: '#cbd5e1' }}>{dep.time}</td>
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{
-                          background: dep.status === 'approved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: dep.status === 'approved' ? '#34d399' : '#fbbf24',
-                          padding: '5px 12px',
-                          borderRadius: '20px',
-                          fontSize: '11px',
-                          fontWeight: '700'
-                        }}>
-                          {dep.status === 'approved' ? 'Đã duyệt' : 'Chờ xác nhận'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                        {dep.status === 'pending' ? (
-                          <button
-                            onClick={() => approveDeposit(dep.id, dep.cccd, dep.amount)}
-                            style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '12px' }}
-                          >
-                            Xác Nhận Đã Nhận Tiền
-                          </button>
-                        ) : (
-                          <span style={{ color: '#64748b', fontSize: '12px' }}>Đã hoàn tất</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                ))}
               </tbody>
             </table>
           </div>
 
-          <h3 style={{ fontSize: '17px', fontWeight: '800', marginBottom: '14px' }}>⚙️ Điều Chỉnh Giá Bán Bò, Vật Phẩm & Giá Thu Mua Sữa</h3>
-          <div style={{ background: '#1e293b', borderRadius: '20px', border: '1px solid #334155', padding: '24px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+          {/* Chỉnh giá */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>⚙️ Điều chỉnh giá</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', padding: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 20 }}>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>Giá Bò Sữa Cao Sản (đ)</label>
-                <input
-                  type="number"
-                  value={editingPrices.milkCow.price}
-                  onChange={e => setEditingPrices({ ...editingPrices, milkCow: { ...editingPrices.milkCow, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
-                />
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Sữa (cửa hàng cũ)</label>
+                <input type="number" value={editingPrices.milkCow?.price || 0} onChange={e => setEditingPrices({...editingPrices, milkCow: {...editingPrices.milkCow, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>Giá Bò Vàng Giống (đ)</label>
-                <input
-                  type="number"
-                  value={editingPrices.goldCow.price}
-                  onChange={e => setEditingPrices({ ...editingPrices, goldCow: { ...editingPrices.goldCow, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
-                />
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Vàng</label>
+                <input type="number" value={editingPrices.goldCow?.price || 0} onChange={e => setEditingPrices({...editingPrices, goldCow: {...editingPrices.goldCow, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>Giá Gói 20 Bó Cỏ (đ)</label>
-                <input
-                  type="number"
-                  value={editingPrices.grass.price}
-                  onChange={e => setEditingPrices({ ...editingPrices, grass: { ...editingPrices.grass, price: Number(e.target.value) } })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
-                />
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Cỏ</label>
+                <input type="number" value={editingPrices.grass?.price || 0} onChange={e => setEditingPrices({...editingPrices, grass: {...editingPrices.grass, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
               </div>
               <div>
-                <label style={{ fontSize: '12px', fontWeight: '700', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>Giá Thu Mua 1 Lít Sữa (đ)</label>
-                <input
-                  type="number"
-                  value={editingPrices.milkSellPrice}
-                  onChange={e => setEditingPrices({ ...editingPrices, milkSellPrice: Number(e.target.value) })}
-                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: '10px 14px', borderRadius: '10px', color: '#fff', fontWeight: '700', boxSizing: 'border-box' }}
-                />
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá thu mua sữa / lít</label>
+                <input type="number" value={editingPrices.milkSellPrice || 0} onChange={e => setEditingPrices({...editingPrices, milkSellPrice: Number(e.target.value)})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
               </div>
             </div>
-            <button
-              onClick={saveNewPrices}
-              style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer' }}
-            >
-              Lưu Thay Đổi Bảng Giá
-            </button>
+            <button onClick={saveNewPrices} style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 800, cursor: 'pointer' }}>Lưu bảng giá</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ===== USER PANEL =====
+  // ===== USER =====
   const transferContent = `BVF${currentUser?.cccd || ''}`;
   const qrAmount = Number(depositAmount) || 0;
   const qrUrl = `https://img.vietqr.io/image/TCB-991169999999-compact2.png?amount=${qrAmount}&addInfo=${encodeURIComponent(transferContent)}&accountName=${encodeURIComponent('NGO HOANG VU')}`;
 
+  const mySharedCows = sharedCows.filter(c => c.owners?.some(o => o.cccd === currentUser.cccd));
+  const availableSharedCows = sharedCows.filter(c => c.availableShares > 0);
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#090d16', color: '#f1f5f9', fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", paddingBottom: '70px' }}>
+    <div style={{ minHeight: '100vh', background: '#090d16', color: '#f1f5f9', fontFamily: 'Inter,sans-serif', paddingBottom: 70 }}>
+      {/* Header */}
       <div style={{ background: '#1e293b', borderBottom: '1px solid #334155', padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ fontSize: '28px' }}>🐄</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 28 }}>🐄</div>
           <div>
-            <h1 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>Bò Vàng Farm</h1>
-            <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>Xin chào, {currentUser?.fullName}</p>
+            <h1 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Bò Vàng Farm</h1>
+            <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>Xin chào, {currentUser?.fullName}</p>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ background: '#0f172a', padding: '8px 14px', borderRadius: '12px', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fbbf24' }}>💰</span>
-            <span style={{ fontWeight: '800', color: '#34d399' }}>{balance.toLocaleString()} đ</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ background: '#0f172a', padding: '8px 14px', borderRadius: 12, border: '1px solid #334155' }}>
+            <span style={{ color: '#fbbf24' }}>💰</span> <span style={{ fontWeight: 800, color: '#34d399' }}>{balance.toLocaleString()}đ</span>
           </div>
-          <button
-            onClick={() => setShowDepositModal(true)}
-            style={{
-              background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-              color: '#fff',
-              border: 'none',
-              padding: '8px 14px',
-              borderRadius: '10px',
-              fontWeight: '700',
-              fontSize: '13px',
-              cursor: 'pointer'
-            }}
-          >
-            + Nạp tiền
-          </button>
-          <button
-            onClick={handleLogout}
-            style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <LogOut size={14} /> Thoát
-          </button>
+          <button onClick={() => setShowDepositModal(true)} style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>+ Nạp tiền</button>
+          <button onClick={handleLogout} style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><LogOut size={14} /></button>
         </div>
       </div>
 
-      <div style={{ display: 'flex', background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 24px', gap: '10px' }}>
-        <button
-          onClick={() => setActiveTab('farm')}
-          style={{ padding: '14px 20px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}
-        >
-          🏡 Trang Trại Của Tôi
-        </button>
-        <button
-          onClick={() => setActiveTab('shop')}
-          style={{ padding: '14px 20px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}
-        >
-          🛒 Cửa Hàng & Kho
-        </button>
+      {/* Tabs */}
+      <div style={{ display: 'flex', background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 24px', gap: 8 }}>
+        <button onClick={() => setActiveTab('invest')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'invest' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'invest' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>📈 Đầu tư Bò</button>
+        <button onClick={() => setActiveTab('my')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'my' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'my' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🏡 Bò của tôi</button>
+        <button onClick={() => setActiveTab('farm')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🐄 Trang trại cá nhân</button>
+        <button onClick={() => setActiveTab('shop')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer' }}>🛒 Cửa hàng</button>
       </div>
 
-      <div style={{ maxWidth: '1000px', margin: '24px auto', padding: '0 20px' }}>
-        {activeTab === 'farm' ? (
+      <div style={{ maxWidth: 1000, margin: '24px auto', padding: '0 20px' }}>
+        {/* TAB ĐẦU TƯ BÒ */}
+        {activeTab === 'invest' && (
           <div>
-            <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '16px' }}>
-              Đàn Bò Của Bạn ({cows.filter(c => c.owner === currentUser.cccd).length} con)
-            </h3>
-            {cows.filter(c => c.owner === currentUser.cccd).length === 0 ? (
-              <div style={{ background: '#1e293b', borderRadius: '16px', padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
-                Bạn chưa có bò nào. Hãy vào Cửa hàng để mua bò!
-              </div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Danh sách bò đang mở bán (Sở hữu chung)</h3>
+            {availableSharedCows.length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>Hiện không có bò nào còn cổ phần trống</div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                {cows.filter(c => c.owner === currentUser.cccd).map(cow => (
-                  <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '700' }}>{cow.name}</h4>
-                        <span style={{ fontSize: '11px', color: '#94a3b8', fontFamily: 'monospace' }}>Tag: {cow.tag}</span>
-                      </div>
-                      <span style={{
-                        background: cow.type === 'milk' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                        color: cow.type === 'milk' ? '#60a5fa' : '#facc15',
-                        padding: '4px 8px',
-                        borderRadius: '8px',
-                        fontSize: '11px',
-                        fontWeight: '700'
-                      }}>
-                        {cow.type === 'milk' ? 'Bò Sữa' : 'Bò Vàng'}
-                      </span>
+              <div style={{ display: 'grid', gap: 16 }}>
+                {availableSharedCows.map(cow => (
+                  <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                    <h4 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 700 }}>{cow.name}</h4>
+                    <p style={{ margin: '0 0 14px', fontSize: 13, color: '#94a3b8' }}>
+                      Giá trị: <strong style={{ color: '#fbbf24' }}>{cow.totalPrice?.toLocaleString()}đ</strong> · Còn trống: <strong style={{ color: '#34d399' }}>{cow.availableShares}%</strong>
+                    </p>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {[25, 50, 75, 100].map(p => (
+                        cow.availableShares >= p && (
+                          <button key={p} onClick={() => buyShares(cow, p)}
+                            style={{ background: '#059669', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                            Mua {p}% ({Math.round(MILK_COW_PRICE * p / 100).toLocaleString()}đ)
+                          </button>
+                        )
+                      ))}
                     </div>
-                    <div style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#94a3b8', marginBottom: '6px' }}>
-                        <span>Độ no</span>
-                        <span style={{ fontWeight: '700', color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB BÒ CỦA TÔI (sở hữu chung) */}
+        {activeTab === 'my' && (
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Bò bạn đang sở hữu ({mySharedCows.length})</h3>
+            {mySharedCows.length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>Bạn chưa sở hữu cổ phần bò nào</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 16 }}>
+                {mySharedCows.map(cow => {
+                  const myShare = cow.owners.find(o => o.cccd === currentUser.cccd);
+                  const now = Date.now();
+                  const canHarvest = cow.nextHarvestAt && now >= cow.nextHarvestAt;
+                  const timeLeft = cow.nextHarvestAt ? Math.max(0, cow.nextHarvestAt - now) : 0;
+                  const hoursLeft = Math.floor(timeLeft / 3600000);
+                  const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+
+                  return (
+                    <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{cow.name}</h4>
+                          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>
+                            Bạn sở hữu: <strong style={{ color: '#34d399' }}>{myShare?.percent}%</strong> · Đã đầu tư: {myShare?.invested?.toLocaleString()}đ
+                          </p>
+                        </div>
+                        <span style={{ background: canHarvest ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: canHarvest ? '#34d399' : '#fbbf24', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                          {canHarvest ? 'Sẵn sàng vắt sữa' : `Còn ${hoursLeft}h ${minsLeft}p`}
+                        </span>
                       </div>
-                      <div style={{ width: '100%', height: '8px', background: '#0f172a', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div style={{ width: `${cow.hunger}%`, height: '100%', background: cow.hunger < 40 ? '#ef4444' : '#10b981' }}></div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => feedCow(cow.id)}
-                        style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
-                      >
-                        🌿 Cho Ăn
+                      <button onClick={() => harvestSharedMilk(cow)} disabled={!canHarvest}
+                        style={{ width: '100%', background: canHarvest ? 'linear-gradient(135deg,#10b981,#059669)' : '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 12, fontWeight: 700, cursor: canHarvest ? 'pointer' : 'not-allowed', opacity: canHarvest ? 1 : 0.6 }}>
+                        {canHarvest ? '🥛 Vắt sữa & Chia tiền' : 'Chưa đến giờ vắt sữa'}
                       </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB TRANG TRẠI CÁ NHÂN (cũ) */}
+        {activeTab === 'farm' && (
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Đàn bò cá nhân của bạn ({cows.filter(c => c.owner === currentUser.cccd).length})</h3>
+            {cows.filter(c => c.owner === currentUser.cccd).length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: 16, padding: 40, textAlign: 'center', color: '#94a3b8' }}>Bạn chưa có bò cá nhân. Hãy vào Cửa hàng để mua.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20 }}>
+                {cows.filter(c => c.owner === currentUser.cccd).map(cow => (
+                  <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                    <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{cow.name}</h4>
+                    <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>Tag: {cow.tag}</p>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+                        <span>Độ no</span>
+                        <span style={{ color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
+                      </div>
+                      <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                        <div style={{ width: `${cow.hunger}%`, height: '100%', background: cow.hunger < 40 ? '#ef4444' : '#10b981' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => feedCow(cow.id)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🌿 Cho ăn</button>
                       {cow.type === 'milk' && (
-                        <button
-                          onClick={() => harvestMilk(cow.id)}
-                          style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}
-                        >
-                          🥛 Thu Sữa
-                        </button>
+                        <button onClick={() => harvestMilk(cow.id)} style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🥛 Thu sữa</button>
                       )}
                     </div>
                   </div>
@@ -1002,201 +684,81 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : (
+        )}
+
+        {/* TAB CỬA HÀNG */}
+        {activeTab === 'shop' && (
           <div>
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', marginTop: 0, marginBottom: '14px' }}>📦 Kho Vật Phẩm Của Bạn</h3>
-              <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', gap: '24px' }}>
-                  <div>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Cỏ Dự Trữ</span>
-                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#34d399' }}>{inventory.grass} bó</span>
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Sữa Tươi</span>
-                    <span style={{ fontSize: '18px', fontWeight: '800', color: '#60a5fa' }}>{inventory.milk} lít</span>
-                  </div>
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20, marginBottom: 24 }}>
+              <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>📦 Kho của bạn</h3>
+              <div style={{ display: 'flex', gap: 24, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <div><span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Cỏ</span><span style={{ fontSize: 18, fontWeight: 800, color: '#34d399' }}>{inventory.grass} bó</span></div>
+                  <div><span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Sữa</span><span style={{ fontSize: 18, fontWeight: 800, color: '#60a5fa' }}>{inventory.milk} lít</span></div>
                 </div>
                 {inventory.milk > 0 && (
-                  <button
-                    onClick={sellMilk}
-                    style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '13px', cursor: 'pointer' }}
-                  >
-                    Bán Ngay ({inventory.milk} Lít = {(inventory.milk * shopPrices.milkSellPrice).toLocaleString()} đ)
+                  <button onClick={sellMilk} style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 12, fontWeight: 800, cursor: 'pointer' }}>
+                    Bán sữa ({inventory.milk}L = {(inventory.milk * shopPrices.milkSellPrice).toLocaleString()}đ)
                   </button>
                 )}
               </div>
             </div>
 
-            <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '16px' }}>🛒 Cửa Hàng Trang Trại</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
-                <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700' }}>{shopPrices.milkCow.name}</h4>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 14px 0' }}>{shopPrices.milkCow.desc}</p>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#fbbf24', marginBottom: '16px' }}>{shopPrices.milkCow.price.toLocaleString()} đ</div>
-                <button
-                  onClick={() => buyItem('milkCow')}
-                  style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  Mua Bò Sữa
-                </button>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🛒 Cửa hàng</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 20 }}>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.milkCow.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.milkCow.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.milkCow.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('milkCow')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Bò Sữa</button>
               </div>
-
-              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
-                <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700' }}>{shopPrices.goldCow.name}</h4>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 14px 0' }}>{shopPrices.goldCow.desc}</p>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#fbbf24', marginBottom: '16px' }}>{shopPrices.goldCow.price.toLocaleString()} đ</div>
-                <button
-                  onClick={() => buyItem('goldCow')}
-                  style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  Mua Bò Vàng
-                </button>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.goldCow.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.goldCow.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.goldCow.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('goldCow')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Bò Vàng</button>
               </div>
-
-              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '20px' }}>
-                <h4 style={{ margin: '0 0 6px 0', fontSize: '15px', fontWeight: '700' }}>{shopPrices.grass.name}</h4>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 14px 0' }}>{shopPrices.grass.desc}</p>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: '#fbbf24', marginBottom: '16px' }}>{shopPrices.grass.price.toLocaleString()} đ</div>
-                <button
-                  onClick={() => buyItem('grass')}
-                  style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '800', fontSize: '13px', cursor: 'pointer' }}
-                >
-                  Mua Cỏ
-                </button>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.grass.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.grass.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.grass.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('grass')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Cỏ</button>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* ===== MODAL NẠP TIỀN + QR CODE ===== */}
+      {/* Modal Nạp tiền */}
       {showDepositModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#1e293b',
-            borderRadius: '20px',
-            padding: '28px',
-            width: '100%',
-            maxWidth: '440px',
-            border: '1px solid #334155',
-            maxHeight: '90vh',
-            overflowY: 'auto'
-          }}>
-            <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '800', textAlign: 'center' }}>
-              Nạp tiền vào tài khoản
-            </h3>
-
-            {/* Chọn nhanh số tiền */}
-            <div style={{ marginBottom: '16px' }}>
-              <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '10px' }}>Chọn nhanh số tiền:</p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {[100000, 200000, 500000, 1000000, 2000000].map(amount => (
-                  <button
-                    key={amount}
-                    onClick={() => setDepositAmount(amount.toString())}
-                    style={{
-                      background: depositAmount === amount.toString() ? '#10b981' : '#0f172a',
-                      color: depositAmount === amount.toString() ? '#fff' : '#cbd5e1',
-                      border: '1px solid #334155',
-                      padding: '8px 14px',
-                      borderRadius: '10px',
-                      fontWeight: '600',
-                      fontSize: '13px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {amount.toLocaleString()}đ
-                  </button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: '#1e293b', borderRadius: 20, padding: 28, width: '100%', maxWidth: 440, border: '1px solid #334155', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 800, textAlign: 'center' }}>Nạp tiền</h3>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 10 }}>Chọn nhanh:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[100000, 500000, 1000000, 2000000, 5000000].map(a => (
+                  <button key={a} onClick={() => setDepositAmount(a.toString())} style={{ background: depositAmount === a.toString() ? '#10b981' : '#0f172a', color: '#fff', border: '1px solid #334155', padding: '8px 14px', borderRadius: 10, fontWeight: 600, cursor: 'pointer' }}>{a.toLocaleString()}đ</button>
                 ))}
               </div>
             </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ fontSize: '13px', fontWeight: '600', color: '#cbd5e1', display: 'block', marginBottom: '8px' }}>
-                Hoặc nhập số tiền khác (đ)
-              </label>
-              <input
-                type="number"
-                placeholder="Ví dụ: 300000"
-                value={depositAmount}
-                onChange={e => setDepositAmount(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: '#0f172a',
-                  border: '1px solid #334155',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  color: '#fff',
-                  fontSize: '15px',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            {/* Thông tin chuyển khoản + QR */}
+            <input type="number" placeholder="Nhập số tiền" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
+              style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', marginBottom: 16, boxSizing: 'border-box' }} />
             {qrAmount >= 10000 && (
-              <div style={{ background: '#0f172a', borderRadius: '14px', padding: '16px', marginBottom: '20px', textAlign: 'center' }}>
-                <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#94a3b8' }}>Quét mã QR để thanh toán:</p>
-                <img
-                  src={qrUrl}
-                  alt="QR Code nạp tiền"
-                  style={{ width: '220px', height: '220px', borderRadius: '12px', background: '#fff', padding: '8px' }}
-                />
-                <div style={{ marginTop: '14px', textAlign: 'left', fontSize: '13px', lineHeight: '1.6' }}>
-                  <p style={{ margin: '0 0 4px 0' }}><strong>Ngân hàng:</strong> Techcombank</p>
-                  <p style={{ margin: '0 0 4px 0' }}><strong>Số tài khoản:</strong> 991169999999</p>
-                  <p style={{ margin: '0 0 4px 0' }}><strong>Chủ tài khoản:</strong> Ngô Hoàng Vũ</p>
-                  <p style={{ margin: '0 0 4px 0', color: '#34d399' }}><strong>Nội dung CK:</strong> {transferContent}</p>
-                  <p style={{ margin: '0', color: '#fbbf24' }}><strong>Số tiền:</strong> {qrAmount.toLocaleString()} đ</p>
+              <div style={{ background: '#0f172a', borderRadius: 14, padding: 16, marginBottom: 20, textAlign: 'center' }}>
+                <img src={qrUrl} alt="QR" style={{ width: 200, height: 200, borderRadius: 12, background: '#fff', padding: 8 }} />
+                <div style={{ marginTop: 12, textAlign: 'left', fontSize: 13, lineHeight: 1.6 }}>
+                  <p style={{ margin: 0 }}><strong>Ngân hàng:</strong> Techcombank</p>
+                  <p style={{ margin: 0 }}><strong>STK:</strong> 991169999999</p>
+                  <p style={{ margin: 0 }}><strong>Chủ TK:</strong> Ngô Hoàng Vũ</p>
+                  <p style={{ margin: 0, color: '#34d399' }}><strong>Nội dung:</strong> {transferContent}</p>
+                  <p style={{ margin: 0, color: '#fbbf24' }}><strong>Số tiền:</strong> {qrAmount.toLocaleString()}đ</p>
                 </div>
               </div>
             )}
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => {
-                  setShowDepositModal(false);
-                  setDepositAmount('');
-                }}
-                style={{
-                  flex: 1,
-                  background: '#334155',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '13px',
-                  borderRadius: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
-              >
-                Đóng
-              </button>
-              <button
-                onClick={requestDeposit}
-                style={{
-                  flex: 1,
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '13px',
-                  borderRadius: '12px',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
-              >
-                Tôi đã chuyển khoản
-              </button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => { setShowDepositModal(false); setDepositAmount(''); }} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 13, borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Đóng</button>
+              <button onClick={requestDeposit} style={{ flex: 1, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: 13, borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Tôi đã chuyển</button>
             </div>
           </div>
         </div>
