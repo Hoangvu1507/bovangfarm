@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Trash2, LogOut, RefreshCw, Plus } from 'lucide-react';
+import { Check, Trash2, LogOut, RefreshCw, Plus, Video } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
@@ -614,6 +614,7 @@ export default function App() {
         <button onClick={() => setActiveTab('my')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'my' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'my' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🏡 Bò của tôi</button>
         <button onClick={() => setActiveTab('farm')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🐄 Trang trại cá nhân</button>
         <button onClick={() => setActiveTab('shop')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🛒 Cửa hàng & Kho</button>
+        <button onClick={() => setActiveTab('camera')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'camera' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'camera' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}><Video size={16} /> 📹 Camera Ba Vì</button>
       </div>
 
       <div style={{ maxWidth: 1000, margin: '24px auto', padding: '0 20px' }}>
@@ -759,6 +760,42 @@ export default function App() {
                 <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.grass.desc}</p>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.grass.price.toLocaleString()}đ</div>
                 <button onClick={() => buyItem('grass')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Cỏ</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB CAMERA TRỰC TIẾP BA VÌ (LINK ẢO ĐÀN BÒ GẶM CỎ) */}
+        {activeTab === 'camera' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>📹 Camera Trực Tiếp Nông Trại Bò Vàng (Ba Vì)</h3>
+              <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, background: '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span> LIVE 24/7
+              </span>
+            </div>
+
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', padding: 16 }}>
+              {/* Sử dụng video luồng chuẩn cảnh bò ăn cỏ ngoài đồng cỏ làm link ảo */}
+              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
+                <iframe 
+                  src="https://www.youtube.com/embed/5qap5aO4i9A?autoplay=1&mute=1&loop=1&playlist=5qap5aO4i9A" 
+                  title="Livestream Giả Lập Nông Trại Bò Ba Vì"
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                  allowFullScreen
+                />
+              </div>
+
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>Khu chuồng trại cao sản Ba Vì - Camera #01</h4>
+                  <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Trạng thái: Đang phát trực tiếp từ đồng cỏ Ba Vì. Bò đang thong thả gặm cỏ tươi.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => alert("Đang kết nối góc máy chuồng Bò Vàng Giống...")} style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>📹 Góc máy 2</button>
+                  <button onClick={() => alert("Đang kết nối góc máy khu vắt sữa...")} style={{ background: '#334155', color: '#34d399', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🥛 Góc máy Vắt sữa</button>
+                </div>
               </div>
             </div>
           </div>
