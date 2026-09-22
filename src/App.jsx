@@ -23,8 +23,8 @@ const db = getFirestore(app);
 
 // ===== CẤU HÌNH BÒ SỮA =====
 const MILK_COW_PRICE = 25000000;      // 25 triệu
-const FIRST_MILK_HOURS = 48;          // 48 giờ mới cho sữa lần đầu
-const MILK_INTERVAL_HOURS = 12;       // Mỗi 12 giờ vắt 1 lần
+const FIRST_MILK_HOURS = 24;          // 24 giờ cho sữa lần đầu sau khi mua/tạo
+const MILK_INTERVAL_HOURS = 12;       // Chu kỳ vắt sữa định kỳ: 12 tiếng / lần
 
 export default function App() {
   const [authMode, setAuthMode] = useState(() => localStorage.getItem('farm_logged_user') ? null : 'login');
@@ -178,6 +178,7 @@ export default function App() {
   // ===== ADMIN: TẠO BÒ SỞ HỮU CHUNG =====
   const createSharedCow = async () => {
     if (!newCowName.trim()) return alert("Nhập tên bò!");
+    const now = Date.now();
     try {
       await addDoc(collection(db, 'cows'), {
         name: newCowName.trim(),
@@ -187,10 +188,9 @@ export default function App() {
         availableShares: 100,
         owners: [],
         status: 'available',
-        createdAt: Date.now(),
-        firstMilkAt: null,
-        lastHarvestAt: null,
-        nextHarvestAt: null
+        createdAt: now,
+        hunger: 100, // Thêm độ no cho bò chung
+        nextHarvestAt: now + FIRST_MILK_HOURS * 60 * 60 * 1000 // Hẹn giờ vắt sữa đầu tiên
       });
       alert("Tạo bò thành công!");
       setNewCowName('');
@@ -237,11 +237,6 @@ export default function App() {
         status: cow.availableShares - percent <= 0 ? 'full' : 'available'
       };
 
-      if (!cow.firstMilkAt) {
-        updates.firstMilkAt = Date.now() + FIRST_MILK_HOURS * 60 * 60 * 1000;
-        updates.nextHarvestAt = updates.firstMilkAt;
-      }
-
       await updateDoc(doc(db, 'cows', cow.id), updates);
       alert(`Mua thành công ${percent}% bò "${cow.name}"\nSố tiền: ${cost.toLocaleString()}đ`);
     } catch (err) {
@@ -250,15 +245,30 @@ export default function App() {
     }
   };
 
-  // ===== VẮT SỮA + CHIA TIỀN =====
+  // ===== LOGIC VẮT SỮA BÒ SỞ HỮU CHUNG (CHUẨN THỰC TẾ) =====
   const harvestSharedMilk = async (cow) => {
     const now = Date.now();
-    if (!cow.nextHarvestAt || now < cow.nextHarvestAt) {
-      return alert("Chưa đến giờ vắt sữa!");
+    
+    // 1. Kiểm tra thời gian chu kỳ vắt sữa (Cooldown)
+    if (cow.nextHarvestAt && now < cow.nextHarvestAt) {
+      const timeLeft = cow.nextHarvestAt - now;
+      const hours = Math.floor(timeLeft / 3600000);
+      const mins = Math.floor((timeLeft % 3600000) / 60000);
+      return alert(`Chưa đến chu kỳ vắt sữa! Vui lòng đợi thêm ${hours} giờ ${mins} phút nữa.`);
     }
-    const liters = Math.floor(Math.random() * 5) + 5; // 5-9 lít
+
+    // 2. Kiểm tra độ no của bò (Phải ăn no mới cho sữa, độ no >= 40%)
+    const currentHunger = cow.hunger ?? 100;
+    if (currentHunger < 40) {
+      return alert(`Bò "${cow.name}" đang đói (${currentHunger}% độ no)! Cần cho bò ăn cỏ trước khi vắt sữa.`);
+    }
+
+    // 3. Tiến hành vắt sữa & chia tiền
+    const liters = Math.floor(Math.random() * 5) + 6; // Sản lượng từ 6 - 10 lít
     const totalMoney = liters * (shopPrices.milkSellPrice || 25000);
+
     try {
+      // Chia tiền cho từng cổ đông theo tỷ lệ phần trăm
       for (const owner of cow.owners || []) {
         const shareMoney = Math.floor(totalMoney * owner.percent / 100);
         const memberRef = doc(db, 'members', owner.cccd);
@@ -268,14 +278,37 @@ export default function App() {
           await updateDoc(memberRef, { balance: currentBal + shareMoney });
         }
       }
+
+      // Cập nhật trạng thái bò: Thiết lập mốc vắt sữa tiếp theo (sau 12 tiếng) và giảm độ no sau khi vắt
       await updateDoc(doc(db, 'cows', cow.id), {
-        lastHarvestAt: now,
-        nextHarvestAt: now + MILK_INTERVAL_HOURS * 60 * 60 * 1000
+        nextHarvestAt: now + MILK_INTERVAL_HOURS * 60 * 60 * 1000,
+        hunger: Math.max(10, currentHunger - 35) // Vắt sữa xong bò sẽ tiêu hao năng lượng
       });
-      alert(`Vắt sữa thành công!\nSản lượng: ${liters} lít\nTổng tiền: ${totalMoney.toLocaleString()}đ\nĐã chia theo tỷ lệ sở hữu.`);
+
+      alert(`🎉 Vắt sữa thành công!\n- Sản lượng: ${liters} lít\n- Tổng doanh thu: ${totalMoney.toLocaleString()}đ\n- Đã tự động chia tiền vào số dư của các cổ đông.`);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi vắt sữa!");
+      alert("Lỗi khi thực hiện vắt sữa!");
+    }
+  };
+
+  // Cho bò sở hữu chung ăn cỏ
+  const feedSharedCow = async (cow) => {
+    if (inventory.grass <= 0) return alert("Bạn đã hết cỏ trong kho cá nhân! Hãy vào Cửa hàng mua thêm.");
+    const newInventory = { ...inventory, grass: inventory.grass - 1 };
+    setInventory(newInventory);
+    
+    const currentHunger = cow.hunger ?? 100;
+    const newHunger = Math.min(100, currentHunger + 30);
+
+    try {
+      // Trừ cỏ trong kho của user
+      await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory });
+      // Tăng độ no cho bò chung trên Firestore
+      await updateDoc(doc(db, 'cows', cow.id), { hunger: newHunger });
+      alert(`🌿 Đã cho bò "${cow.name}" ăn 1 bó cỏ! Độ no hiện tại: ${newHunger}%`);
+    } catch (err) {
+      alert("Lỗi cho bò ăn!");
     }
   };
 
@@ -283,7 +316,7 @@ export default function App() {
   const feedCow = async (cowId) => {
     if (inventory.grass <= 0) return alert("Bạn đã hết cỏ! Hãy mua thêm ở cửa hàng.");
     const newInventory = { ...inventory, grass: inventory.grass - 1 };
-    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.min(100, c.hunger + 25) } : c);
+    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.min(100, c.hunger + 30) } : c);
     
     setInventory(newInventory);
     setCows(newCows);
@@ -294,15 +327,15 @@ export default function App() {
   const harvestMilk = async (cowId) => {
     const cow = cows.find(c => c.id === cowId);
     if (cow.type !== 'milk') return alert("Chỉ bò sữa mới cho sữa!");
-    if (cow.hunger < 40) return alert("Bò đang đói, hãy cho ăn trước!");
+    if (cow.hunger < 40) return alert("Bò đang đói (dưới 40% độ no), hãy cho ăn trước!");
     
     const newInventory = { ...inventory, milk: inventory.milk + 5 };
-    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.max(10, c.hunger - 30) } : c);
+    const newCows = cows.map(c => c.id === cowId ? { ...c, hunger: Math.max(10, c.hunger - 35) } : c);
 
     setInventory(newInventory);
     setCows(newCows);
     await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory, cows: newCows });
-    alert("Thu hoạch thành công +5 lít sữa tươi!");
+    alert("Thu hoạch thành công +5 lít sữa tươi vào kho cá nhân!");
   };
 
   const buyItem = async (itemKey) => {
@@ -660,10 +693,14 @@ export default function App() {
                 {mySharedCows.map(cow => {
                   const myShare = cow.owners.find(o => o.cccd === currentUser.cccd);
                   const now = Date.now();
-                  const canHarvest = cow.nextHarvestAt && now >= cow.nextHarvestAt;
+                  const hunger = cow.hunger ?? 100;
+                  const canHarvestTime = !cow.nextHarvestAt || now >= cow.nextHarvestAt;
+                  const canHarvest = canHarvestTime && hunger >= 40;
+                  
                   const timeLeft = cow.nextHarvestAt ? Math.max(0, cow.nextHarvestAt - now) : 0;
                   const hoursLeft = Math.floor(timeLeft / 3600000);
                   const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+
                   return (
                     <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -674,13 +711,30 @@ export default function App() {
                           </p>
                         </div>
                         <span style={{ background: canHarvest ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: canHarvest ? '#34d399' : '#fbbf24', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
-                          {canHarvest ? 'Sẵn sàng vắt sữa' : `Còn ${hoursLeft}h ${minsLeft}p`}
+                          {canHarvest ? 'Sẵn sàng vắt sữa' : (!canHarvestTime ? `Chờ chu kỳ: ${hoursLeft}h ${minsLeft}p` : 'Bò đang đói (<40%)')}
                         </span>
                       </div>
-                      <button onClick={() => harvestSharedMilk(cow)} disabled={!canHarvest}
-                        style={{ width: '100%', background: canHarvest ? 'linear-gradient(135deg,#10b981,#059669)' : '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 12, fontWeight: 700, cursor: canHarvest ? 'pointer' : 'not-allowed', opacity: canHarvest ? 1 : 0.6 }}>
-                        {canHarvest ? '🥛 Vắt sữa & Chia tiền' : 'Chưa đến giờ vắt sữa'}
-                      </button>
+
+                      {/* Thanh độ no của bò chung */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+                          <span>Độ no của bò chung</span>
+                          <span style={{ color: hunger < 40 ? '#f87171' : '#34d399' }}>{hunger}%</span>
+                        </div>
+                        <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${hunger}%`, height: '100%', background: hunger < 40 ? '#ef4444' : '#10b981' }} />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button onClick={() => feedSharedCow(cow)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                          🌿 Cho bò ăn cỏ (Kho: {inventory.grass} bó)
+                        </button>
+                        <button onClick={() => harvestSharedMilk(cow)} disabled={!canHarvest}
+                          style={{ flex: 1, background: canHarvest ? 'linear-gradient(135deg,#10b981,#059669)' : '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: canHarvest ? 'pointer' : 'not-allowed', opacity: canHarvest ? 1 : 0.6 }}>
+                          {canHarvest ? '🥛 Vắt sữa & Nhận tiền' : 'Chưa đủ điều kiện'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -703,7 +757,7 @@ export default function App() {
                     <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>Tag: {cow.tag}</p>
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
-                        <span>Độ no</span>
+                        <span>Độ no (Cần &gt;= 40 để vắt sữa)</span>
                         <span style={{ color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
                       </div>
                       <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
@@ -713,7 +767,7 @@ export default function App() {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button onClick={() => feedCow(cow.id)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🌿 Cho ăn</button>
                       {cow.type === 'milk' && (
-                        <button onClick={() => harvestMilk(cow.id)} style={{ flex: 1, background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🥛 Thu sữa</button>
+                        <button onClick={() => harvestMilk(cow.id)} style={{ flex: 1, background: cow.hunger >= 40 ? '#059669' : '#334155', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: cow.hunger >= 40 ? 'pointer' : 'not-allowed', opacity: cow.hunger >= 40 ? 1 : 0.6 }}>🥛 Thu sữa</button>
                       )}
                     </div>
                   </div>
@@ -765,7 +819,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB CAMERA TRỰC TIẾP BA VÌ (DÙNG VIDEO HTML5 MP4 MẪU ỔN ĐỊNH CAO) */}
+        {/* TAB CAMERA TRỰC TIẾP BA VÌ */}
         {activeTab === 'camera' && (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -776,7 +830,6 @@ export default function App() {
             </div>
 
             <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', padding: 16 }}>
-              {/* Thẻ video HTML5 chạy video mẫu trực tiếp, tự động lặp lại */}
               <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
                 <video 
                   autoPlay 
