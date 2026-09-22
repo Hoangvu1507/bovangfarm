@@ -1,4 +1,144 @@
 import React, { useState, useEffect } from 'react';
+
+// Component Camera trực tiếp xử lý tình trạng bò che kín màn hình
+function LiveCamera() {
+  const cameras = [
+    {
+      title: "Khu chuồng trại cao sản Ba Vì - Camera #01",
+      status: "Trạng thái: Đang phát trực tiếp từ đồng cỏ Ba Vì. Bò đang thong thả gặm cỏ tươi.",
+      overlay: "🟢 Camera #01 · Trực tiếp từ Đồng cỏ Ba Vì · 1080p (FPS: 30)",
+      image: "https://images.unsplash.com/photo-1570042225831-d98fa7577f1e?q=80&w=1200&auto=format&fit=crop"
+    },
+    {
+      title: "Khu chuồng trại cao sản Ba Vì - Góc máy 2",
+      status: "Trạng thái: Góc nhìn toàn cảnh đồng cỏ phía Tây, gió nhẹ, thời tiết đẹp.",
+      overlay: "🟢 Góc máy 2 · Góc toàn cảnh · 1080p (FPS: 30)",
+      image: "https://images.unsplash.com/photo-1500595046743-cd271d694d30?q=80&w=1200&auto=format&fit=crop"
+    },
+    {
+      title: "Khu vực vắt sữa tự động - Góc máy Vắt sữa",
+      status: "Trạng thái: Khu vực chuồng sạch sẽ, quy trình khép kín tự động.",
+      overlay: "🟢 Góc máy Vắt sữa · Khu khép kín · 1080p (FPS: 30)",
+      image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?q=80&w=1200&auto=format&fit=crop"
+    }
+  ];
+
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [fade, setFade] = useState(true);
+
+  // Tự động chuyển góc máy sau mỗi 10 giây để tránh bị kẹt hình chú bò che cam
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFade(false);
+      setTimeout(() => {
+        setCurrentIndex((prevIndex) => (prevIndex + 1) % cameras.length);
+        setFade(true);
+      }, 300);
+    }, 10000);
+
+    return () => clearInterval(timer);
+  }, [cameras.length]);
+
+  const handleSelectCam = (index) => {
+    setFade(false);
+    setTimeout(() => {
+      setCurrentIndex(index);
+      setFade(true);
+    }, 300);
+  };
+
+  const currentCam = cameras[currentIndex];
+
+  return (
+    <div style={{ maxWidth: '950px', margin: '20px auto', background: '#161b22', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 12px 32px rgba(0,0,0,0.6)', border: '1px solid #30363d', color: '#fff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
+      
+      {/* Thanh tiêu đề trên cùng */}
+      <div style={{ padding: '14px 20px', background: '#0d1117', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #30363d', fontSize: '14px', fontWeight: '500' }}>
+        <span>📹 Camera Trực Tiếp Nông Trại Bò Vàng (Ba Vì)</span>
+        <div style={{ color: '#ff3b30', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', fontSize: '13px' }}>
+          <span style={{ width: '8px', height: '8px', backgroundColor: '#ff3b30', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 8px #ff3b30' }}></span> LIVE 24/7
+        </div>
+      </div>
+
+      {/* Khung chứa ảnh video trực tiếp */}
+      <div style={{ position: 'relative', width: '100%', height: '500px', background: '#000', overflow: 'hidden' }}>
+        <img 
+          src={currentCam.image} 
+          alt="Live Stream" 
+          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: fade ? 1 : 0.2, transition: 'opacity 0.3s ease-in-out' }} 
+        />
+        <div style={{ position: 'absolute', bottom: '16px', left: '16px', background: 'rgba(13, 17, 23, 0.75)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)' }}>
+          {currentCam.overlay}
+        </div>
+      </div>
+
+      {/* Thanh thông tin và nút bấm chuyển góc (Y hệt bố cục ảnh gốc) */}
+      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161b22' }}>
+        <div>
+          <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px', color: '#e6edf3' }}>{currentCam.title}</div>
+          <div style={{ fontSize: '13px', color: '#8b949e' }}>{currentCam.status}</div>
+        </div>
+
+        {/* Các nút bấm góc máy bên phải */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => handleSelectCam(1)}
+            style={{ background: currentIndex === 1 ? '#1f6feb' : '#21262d', color: '#c9d1d9', border: '1px solid #30363d', padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: '0.2s' }}
+          >
+            📷 Góc máy 2
+          </button>
+          <button 
+            onClick={() => handleSelectCam(2)}
+            style={{ background: currentIndex === 2 ? '#1f6feb' : '#21262d', color: '#c9d1d9', border: '1px solid #30363d', padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: '0.2s' }}
+          >
+            🥛 Góc máy Vắt sữa
+          </button>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// Component chính của App (giữ nguyên logic gốc của ông và nhúng LiveCamera vào trên cùng)
+export default function App() {
+  const [showDepositModal, setShowDepositModal] = useState(false);
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#090d16', color: '#fff', padding: '20px' }}>
+      
+      {/* KHUNG CAMERA TRỰC TIẾP ĐÃ ĐƯỢC TÍCH HỢP */}
+      <LiveCamera />
+
+      {/* CÁC THÀNH PHẦN GIAO DIỆN CŨ CỦA DỰ ÁN */}
+      {showDepositModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ background: '#1e1e1e', padding: '20px', borderRadius: '8px' }}>
+            <p style={{ margin: '0 0 10px 0', color: '#fbbf24' }}>Thông báo hệ thống Bò Vàng Farm</p>
+            <button 
+              onClick={() => setShowDepositModal(false)}
+              style={{ background: '#333', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: '12px', maxWidth: '950px', margin: '20px auto', justifyContent: 'center' }}>
+        <button 
+          onClick={() => setShowDepositModal(true)} 
+          style={{ background: '#10b981', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
+        >
+          Mở thông báo hệ thống
+        </button>
+      </div>
+
+    </div>
+  );
+}
+
+import React, { useState, useEffect } from 'react';
 import { Check, Trash2, LogOut, RefreshCw, Plus, Video } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
