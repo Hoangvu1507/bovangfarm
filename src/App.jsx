@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Plus, Video } from 'lucide-react';
+import { Check, Trash2, LogOut, RefreshCw, Plus, Video } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import {
@@ -26,108 +26,20 @@ const MILK_COW_PRICE = 25000000;          // 25 triệu/con
 const MILK_INTERVAL_HOURS = 12;           // Cooldown giữa 2 lần vắt (12 tiếng)
 const HUNGER_LOSS_PER_HOUR = 35 / 24;     // Bò tiêu hao khoảng 35% độ no mỗi 24 giờ không ăn
 
-// ===== COMPONENT CAMERA TRỰC TIẾP BA VÌ =====
-function LiveCamera() {
-  const cameras = [
-    {
-      title: "Khu chuồng trại cao sản Ba Vì - Camera #01",
-      status: "Trạng thái: Đang phát trực tiếp từ đồng cỏ Ba Vì. Bò đang thong thả gặm cỏ tươi.",
-      overlay: "🟢 Camera #01 · Trực tiếp từ Đồng cỏ Ba Vì · 1080p (FPS: 30)",
-      image: "https://images.unsplash.com/photo-1570042225831-d98fa7577f1e?q=80&w=1200&auto=format&fit=crop"
-    },
-    {
-      title: "Khu chuồng trại cao sản Ba Vì - Góc máy 2",
-      status: "Trạng thái: Góc nhìn toàn cảnh đồng cỏ phía Tây, gió nhẹ, thời tiết đẹp.",
-      overlay: "🟢 Góc máy 2 · Góc toàn cảnh · 1080p (FPS: 30)",
-      image: "https://images.unsplash.com/photo-1500595046743-cd271d694d30?q=80&w=1200&auto=format&fit=crop"
-    },
-    {
-      title: "Khu vực vắt sữa tự động - Góc máy Vắt sữa",
-      status: "Trạng thái: Khu vực chuồng sạch sẽ, quy trình khép kín tự động.",
-      overlay: "🟢 Góc máy Vắt sữa · Khu khép kín · 1080p (FPS: 30)",
-      image: "https://images.unsplash.com/photo-1516467508483-a7212febe31a?q=80&w=1200&auto=format&fit=crop"
-    }
-  ];
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [fade, setFade] = useState(true);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFade(false);
-      setTimeout(() => {
-        setCurrentIndex((prevIndex) => (prevIndex + 1) % cameras.length);
-        setFade(true);
-      }, 300);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [cameras.length]);
-
-  const handleSelectCam = (index) => {
-    setFade(false);
-    setTimeout(() => {
-      setCurrentIndex(index);
-      setFade(true);
-    }, 300);
-  };
-
-  const currentCam = cameras[currentIndex];
-
-  return (
-    <div style={{ maxWidth: '950px', margin: '20px auto', background: '#161b22', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 12px 32px rgba(0,0,0,0.6)', border: '1px solid #30363d', color: '#fff', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
-      <div style={{ padding: '14px 20px', background: '#0d1117', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #30363d', fontSize: '14px', fontWeight: '500' }}>
-        <span>📹 Camera Trực Tiếp Nông Trại Bò Vàng (Ba Vì)</span>
-        <div style={{ color: '#ff3b30', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold', fontSize: '13px' }}>
-          <span style={{ width: '8px', height: '8px', backgroundColor: '#ff3b30', borderRadius: '50%', display: 'inline-block', boxShadow: '0 0 8px #ff3b30' }}></span> LIVE 24/7
-        </div>
-      </div>
-      <div style={{ position: 'relative', width: '100%', height: '500px', background: '#000', overflow: 'hidden' }}>
-        <img 
-          src={currentCam.image} 
-          alt="Live Stream" 
-          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: fade ? 1 : 0.2, transition: 'opacity 0.3s ease-in-out' }} 
-        />
-        <div style={{ position: 'absolute', bottom: '16px', left: '16px', background: 'rgba(13, 17, 23, 0.75)', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(4px)' }}>
-          {currentCam.overlay}
-        </div>
-      </div>
-      <div style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#161b22' }}>
-        <div>
-          <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px', color: '#e6edf3' }}>{currentCam.title}</div>
-          <div style={{ fontSize: '13px', color: '#8b949e' }}>{currentCam.status}</div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button 
-            onClick={() => handleSelectCam(1)}
-            style={{ background: currentIndex === 1 ? '#1f6feb' : '#21262d', color: '#c9d1d9', border: '1px solid #30363d', padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: '0.2s' }}
-          >
-            📷 Góc máy 2
-          </button>
-          <button 
-            onClick={() => handleSelectCam(2)}
-            style={{ background: currentIndex === 2 ? '#1f6feb' : '#21262d', color: '#c9d1d9', border: '1px solid #30363d', padding: '7px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', transition: '0.2s' }}
-          >
-            🥛 Góc máy Vắt sữa
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ===== COMPONENT CHÍNH APP =====
 export default function App() {
   const [authMode, setAuthMode] = useState(() => localStorage.getItem('farm_logged_user') ? null : 'login');
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('farm_logged_user');
     return saved ? JSON.parse(saved) : null;
   });
+
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [regForm, setRegForm] = useState({ fullName: '', cccd: '', password: '', dob: '', phone: '', address: '' });
   
   const [members, setMembers] = useState([]);
   const [pendingDeposits, setPendingDeposits] = useState([]);
-  const [sharedCows, setSharedCows] = useState([]);
+  const [sharedCows, setSharedCows] = useState([]); // Bò sở hữu chung
   
   const [shopPrices, setShopPrices] = useState({
     milkCow: { name: 'Bò Sữa Cao Sản', price: 300000, desc: 'Cho sữa tươi định kỳ hàng ngày.' },
@@ -141,20 +53,29 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('invest');
   
   const [inventory, setInventory] = useState({ grass: 0, milk: 0, medicine: 0 });
-  const [cows, setCows] = useState([]);
+  const [cows, setCows] = useState([]); // Bò cá nhân
+
+  // Nạp tiền modal
   const [depositAmount, setDepositAmount] = useState('');
   const [showDepositModal, setShowDepositModal] = useState(false);
+  
+  // Admin tạo bò
   const [newCowName, setNewCowName] = useState('');
 
+  // Hàm tính toán độ no thực tế dựa trên thời gian trôi qua (Mô phỏng bò thật)
   const calculateRealtimeHunger = (cow) => {
     const now = Date.now();
     const lastUpdate = cow.lastHungerUpdate || cow.createdAt || now;
     const hoursPassed = (now - lastUpdate) / (1000 * 60 * 60);
+    
     if (hoursPassed <= 0) return cow.hunger ?? 100;
+    
     const hungerLost = Math.floor(hoursPassed * HUNGER_LOSS_PER_HOUR);
-    return Math.max(0, (cow.hunger ?? 100) - hungerLost);
+    const currentHunger = Math.max(0, (cow.hunger ?? 100) - hungerLost);
+    return currentHunger;
   };
 
+  // Lắng nghe dữ liệu realtime từ Firestore
   useEffect(() => {
     const unsubMembers = onSnapshot(collection(db, 'members'), (snap) => {
       setMembers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -186,6 +107,7 @@ export default function App() {
     return () => { unsubMembers(); unsubDeposits(); unsubSharedCows(); unsubPrices(); };
   }, []);
 
+  // Đồng bộ số dư và kho cá nhân của user (kèm tính độ no bò cá nhân)
   useEffect(() => {
     if (currentUser?.role === 'user') {
       const me = members.find(m => m.cccd === currentUser.cccd || m.id === currentUser.cccd);
@@ -193,12 +115,17 @@ export default function App() {
         setBalance(me.balance || 0);
         if (me.inventory) setInventory(me.inventory);
         if (me.cows) {
-          setCows(me.cows.map(c => ({ ...c, hunger: calculateRealtimeHunger(c) })));
+          const updatedCows = me.cows.map(c => ({
+            ...c,
+            hunger: calculateRealtimeHunger(c)
+          }));
+          setCows(updatedCows);
         }
       }
     }
   }, [members, currentUser]);
 
+  // ===== XÁC THỰC (AUTH) =====
   const handleLogin = (e) => {
     e.preventDefault();
     if (loginUsername === '001098000393' && loginPassword === 'Phuongthao97@@') {
@@ -251,6 +178,7 @@ export default function App() {
     setAuthMode('login');
   };
 
+  // ===== NẠP TIỀN =====
   const requestDeposit = async () => {
     const amount = Number(depositAmount);
     if (!amount || amount < 10000) return alert("Tối thiểu 10.000đ");
@@ -270,6 +198,7 @@ export default function App() {
     }
   };
 
+  // ===== ADMIN: TẠO BÒ SỞ HỮU CHUNG =====
   const createSharedCow = async () => {
     if (!newCowName.trim()) return alert("Nhập tên bò!");
     const now = Date.now();
@@ -296,6 +225,7 @@ export default function App() {
     }
   };
 
+  // ===== USER: MUA CỔ PHẦN =====
   const buyShares = async (cow, percent) => {
     if (cow.availableShares < percent) return alert("Không đủ cổ phần trống!");
     const cost = Math.round(MILK_COW_PRICE * percent / 100);
@@ -304,10 +234,12 @@ export default function App() {
     const myOwnership = cow.owners?.find(o => o.cccd === currentUser.cccd);
     const currentPercent = myOwnership ? myOwnership.percent : 0;
     if (currentPercent + percent > 100) return alert("Bạn không thể sở hữu quá 100%!");
+
     try {
       const newBalance = balance - cost;
       await updateDoc(doc(db, 'members', currentUser.cccd), { balance: newBalance });
       setBalance(newBalance);
+
       const newOwners = [...(cow.owners || [])];
       const existIdx = newOwners.findIndex(o => o.cccd === currentUser.cccd);
       if (existIdx >= 0) {
@@ -324,22 +256,30 @@ export default function App() {
           joinedAt: Date.now()
         });
       }
-      await updateDoc(doc(db, 'cows', cow.id), {
+
+      const updates = {
         availableShares: cow.availableShares - percent,
         owners: newOwners,
         status: cow.availableShares - percent <= 0 ? 'full' : 'available'
-      });
+      };
+
+      await updateDoc(doc(db, 'cows', cow.id), updates);
       alert(`Mua thành công ${percent}% bò "${cow.name}"\nSố tiền: ${cost.toLocaleString()}đ`);
     } catch (err) {
+      console.error(err);
       alert("Lỗi mua cổ phần!");
     }
   };
 
+  // ===== VẮT SỮA BÒ SỞ HỮU CHUNG =====
   const harvestSharedMilk = async (cow) => {
     const now = Date.now();
     const todayStr = new Date().toDateString();
     const currentHunger = calculateRealtimeHunger(cow);
-    let dailyCount = cow.lastResetDate === todayStr ? (cow.dailyHarvestCount || 0) : 0;
+
+    let dailyCount = cow.dailyHarvestCount || 0;
+    if (cow.lastResetDate !== todayStr) dailyCount = 0;
+
     if (dailyCount >= 2) return alert("🚫 Con bò này đã đạt giới hạn tối đa 2 lần vắt trong ngày hôm nay!");
     if (cow.nextHarvestAt && now < cow.nextHarvestAt) {
       const timeLeft = cow.nextHarvestAt - now;
@@ -348,8 +288,10 @@ export default function App() {
       return alert(`⏳ Chưa đến chu kỳ vắt sữa tiếp theo! Vui lòng đợi thêm ${hours} giờ ${mins} phút.`);
     }
     if (currentHunger < 40) return alert(`⚠️ Bò "${cow.name}" đang đói (${currentHunger}% độ no)! Cần cho bò ăn cỏ trước.`);
+
     const liters = Math.floor(Math.random() * 3) + 7;
     const totalMoney = liters * (shopPrices.milkSellPrice || 25000);
+
     try {
       for (const owner of cow.owners || []) {
         const shareMoney = Math.floor(totalMoney * owner.percent / 100);
@@ -360,6 +302,7 @@ export default function App() {
           await updateDoc(memberRef, { balance: currentBal + shareMoney });
         }
       }
+
       await updateDoc(doc(db, 'cows', cow.id), {
         dailyHarvestCount: dailyCount + 1,
         lastResetDate: todayStr,
@@ -367,8 +310,10 @@ export default function App() {
         hunger: Math.max(0, currentHunger - 40),
         lastHungerUpdate: now
       });
-      alert(`🎉 Vắt sữa thành công!\n- Sản lượng: ${liters} lít\n- Tổng doanh thu: ${totalMoney.toLocaleString()}đ`);
+
+      alert(`🎉 Vắt sữa thành công!\n- Sản lượng: ${liters} lít (Lần ${dailyCount + 1}/2)\n- Tổng doanh thu: ${totalMoney.toLocaleString()}đ\n- Đã chia tiền vào số dư cổ đông.`);
     } catch (err) {
+      console.error(err);
       alert("Lỗi khi vắt sữa!");
     }
   };
@@ -377,9 +322,11 @@ export default function App() {
     if (inventory.grass <= 0) return alert("Bạn đã hết cỏ! Hãy mua thêm ở cửa hàng.");
     const newInventory = { ...inventory, grass: inventory.grass - 1 };
     setInventory(newInventory);
+    
     const now = Date.now();
     const currentHunger = calculateRealtimeHunger(cow);
     const newHunger = Math.min(100, currentHunger + 35);
+
     try {
       await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory });
       await updateDoc(doc(db, 'cows', cow.id), { hunger: newHunger, lastHungerUpdate: now });
@@ -389,17 +336,67 @@ export default function App() {
     }
   };
 
+  // ===== BÒ CÁ NHÂN =====
+  const feedCow = async (cowId) => {
+    if (inventory.grass <= 0) return alert("Bạn đã hết cỏ! Hãy mua thêm ở cửa hàng.");
+    const now = Date.now();
+    const newInventory = { ...inventory, grass: inventory.grass - 1 };
+    
+    const newCows = cows.map(c => {
+      if (c.id === cowId) {
+        const curHunger = calculateRealtimeHunger(c);
+        return { ...c, hunger: Math.min(100, curHunger + 35), lastHungerUpdate: now };
+      }
+      return c;
+    });
+    
+    setInventory(newInventory);
+    setCows(newCows);
+    await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory, cows: newCows });
+    alert("Đã cho bò ăn cỏ!");
+  };
+
+  const harvestMilk = async (cowId) => {
+    const cow = cows.find(c => c.id === cowId);
+    if (cow.type !== 'milk') return alert("Chỉ bò sữa mới cho sữa!");
+    
+    const now = Date.now();
+    const todayStr = new Date().toDateString();
+    const curHunger = calculateRealtimeHunger(cow);
+    let dailyCount = cow.lastResetDate === todayStr ? (cow.dailyHarvestCount || 0) : 0;
+
+    if (dailyCount >= 2) return alert("Con bò này đã đạt giới hạn tối đa 2 lần vắt trong ngày!");
+    if (curHunger < 40) return alert("Bò đang đói (dưới 40% độ no), hãy cho ăn trước!");
+    
+    const newInventory = { ...inventory, milk: inventory.milk + 8 };
+    const newCows = cows.map(c => c.id === cowId ? { 
+      ...c, 
+      hunger: Math.max(0, curHunger - 40),
+      lastHungerUpdate: now,
+      dailyHarvestCount: dailyCount + 1,
+      lastResetDate: todayStr
+    } : c);
+
+    setInventory(newInventory);
+    setCows(newCows);
+    await updateDoc(doc(db, 'members', currentUser.cccd), { inventory: newInventory, cows: newCows });
+    alert(`Thu hoạch thành công +8 lít sữa tươi! (Lần ${dailyCount + 1}/2 hôm nay)`);
+  };
+
   const buyItem = async (itemKey) => {
     let cost = 0;
     if (itemKey === 'milkCow') cost = shopPrices.milkCow.price;
     if (itemKey === 'goldCow') cost = shopPrices.goldCow.price;
     if (itemKey === 'grass') cost = shopPrices.grass.price;
+
     if (balance < cost) return alert("Số dư không đủ!");
     const newBalance = balance - cost;
     setBalance(newBalance);
+
     const now = Date.now();
     let newInventory = { ...inventory };
     let newCows = [...cows];
+
     if (itemKey === 'grass') {
       newInventory.grass += 20;
     } else if (itemKey === 'milkCow') {
@@ -407,8 +404,10 @@ export default function App() {
     } else if (itemKey === 'goldCow') {
       newCows.push({ id: now, name: `Bò Vàng #${newCows.length + 1}`, tag: `BV-200${newCows.length + 1}`, type: 'gold', hunger: 100, lastHungerUpdate: now });
     }
+
     setInventory(newInventory);
     setCows(newCows);
+
     try {
       await updateDoc(doc(db, 'members', currentUser.cccd), { 
         balance: newBalance,
@@ -417,6 +416,7 @@ export default function App() {
       });
       alert("Giao dịch mua thành công!");
     } catch (err) {
+      console.error(err);
       alert("Lỗi cập nhật dữ liệu cửa hàng.");
     }
   };
@@ -426,8 +426,10 @@ export default function App() {
     const earned = inventory.milk * shopPrices.milkSellPrice;
     const newBalance = balance + earned;
     const newInventory = { ...inventory, milk: 0 };
+
     setInventory(newInventory);
     setBalance(newBalance);
+
     try {
       await updateDoc(doc(db, 'members', currentUser.cccd), { 
         balance: newBalance,
@@ -439,6 +441,7 @@ export default function App() {
     }
   };
 
+  // ===== HÀNH ĐỘNG ADMIN =====
   const approveMember = async (id) => {
     await updateDoc(doc(db, 'members', id), { status: 'approved' });
     alert("Đã duyệt thành viên!");
@@ -476,7 +479,7 @@ export default function App() {
     window.location.reload();
   };
 
-  // Màn hình Đăng nhập / Đăng ký
+  // ===== GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ =====
   if (authMode) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg,#0f172a,#1e293b)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, fontFamily: 'Inter,sans-serif', color: '#f1f5f9' }}>
@@ -514,7 +517,7 @@ export default function App() {
     );
   }
 
-  // Màn hình Quản trị viên (Admin)
+  // ===== GIAO DIỆN ADMIN =====
   if (currentUser?.role === 'admin') {
     return (
       <div style={{ minHeight: '100vh', background: '#090d16', color: '#f1f5f9', fontFamily: 'Inter,sans-serif', paddingBottom: 50 }}>
@@ -528,7 +531,9 @@ export default function App() {
             <button onClick={handleLogout} style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}><LogOut size={14} /> Đăng Xuất</button>
           </div>
         </div>
+
         <div style={{ maxWidth: 1150, margin: '28px auto', padding: '0 24px' }}>
+          {/* Tạo bò sở hữu chung */}
           <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', padding: 24, marginBottom: 32 }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 800 }}>➕ Tạo Bò Sữa Sở Hữu Chung (25.000.000đ)</h3>
             <div style={{ display: 'flex', gap: 12 }}>
@@ -539,6 +544,8 @@ export default function App() {
               </button>
             </div>
           </div>
+
+          {/* Danh sách bò sở hữu chung */}
           <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>🐄 Bò Sở Hữu Chung ({sharedCows.length})</h3>
           <div style={{ display: 'grid', gap: 16, marginBottom: 36 }}>
             {sharedCows.length === 0 ? (
@@ -551,16 +558,108 @@ export default function App() {
                     {cow.availableShares === 0 ? 'Đã bán hết' : `Còn ${cow.availableShares}%`}
                   </span>
                 </div>
-                <p style={{ margin: '0 0 8px', fontSize: 13, color: '#94a3b8' }}>Giá trị: {cow.totalPrice?.toLocaleString()}đ · Độ no: <strong style={{ color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</strong></p>
+                <p style={{ margin: '0 0 8px', fontSize: 13, color: '#94a3b8' }}>Giá trị: {cow.totalPrice?.toLocaleString()}đ · Độ no thực tế: <strong style={{ color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</strong></p>
+                {cow.owners?.length > 0 && (
+                  <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1' }}>
+                    Chủ sở hữu: {cow.owners.map(o => `${o.fullName} (${o.percent}%)`).join(' · ')}
+                  </p>
+                )}
               </div>
             ))}
+          </div>
+
+          {/* Thành viên */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>👥 Thành viên</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', overflow: 'hidden', marginBottom: 36 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: '#94a3b8' }}>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Họ tên</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>CCCD</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Trạng thái</th>
+                  <th style={{ padding: 14, textAlign: 'right' }}>Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map(m => (
+                  <tr key={m.id} style={{ borderTop: '1px solid #334155' }}>
+                    <td style={{ padding: 14 }}>{m.fullName}</td>
+                    <td style={{ padding: 14, color: '#34d399', fontFamily: 'monospace' }}>{m.cccd}</td>
+                    <td style={{ padding: 14 }}>
+                      <span style={{ background: m.status === 'approved' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: m.status === 'approved' ? '#34d399' : '#fbbf24', padding: '4px 10px', borderRadius: 20, fontSize: 12 }}>{m.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt'}</span>
+                    </td>
+                    <td style={{ padding: 14, textAlign: 'right' }}>
+                      {m.status !== 'approved' && <button onClick={() => approveMember(m.id)} style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, marginRight: 8, cursor: 'pointer' }}>Duyệt</button>}
+                      <button onClick={() => rejectMember(m.id, m.cccd)} style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>Xóa</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Lệnh nạp tiền */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>💰 Lệnh nạp tiền</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', overflow: 'hidden', marginBottom: 36 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#0f172a', color: '#94a3b8' }}>
+                  <th style={{ padding: 14, textAlign: 'left' }}>CCCD</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Số tiền</th>
+                  <th style={{ padding: 14, textAlign: 'left' }}>Thời gian</th>
+                  <th style={{ padding: 14, textAlign: 'right' }}>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingDeposits.filter(d => d.status === 'pending').length === 0 ? (
+                  <tr><td colSpan="4" style={{ padding: 24, textAlign: 'center', color: '#64748b' }}>Không có lệnh chờ</td></tr>
+                ) : pendingDeposits.filter(d => d.status === 'pending').map(dep => (
+                  <tr key={dep.id} style={{ borderTop: '1px solid #334155' }}>
+                    <td style={{ padding: 14, fontFamily: 'monospace', color: '#34d399' }}>{dep.cccd}</td>
+                    <td style={{ padding: 14, color: '#fbbf24', fontWeight: 700 }}>+{Number(dep.amount).toLocaleString()}đ</td>
+                    <td style={{ padding: 14 }}>{dep.time}</td>
+                    <td style={{ padding: 14, textAlign: 'right' }}>
+                      <button onClick={() => approveDeposit(dep.id, dep.cccd, dep.amount)} style={{ background: '#059669', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, cursor: 'pointer' }}>Xác nhận</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Điều chỉnh giá */}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 14 }}>⚙️ Điều chỉnh giá</h3>
+          <div style={{ background: '#1e293b', borderRadius: 20, border: '1px solid #334155', padding: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 16, marginBottom: 20 }}>
+              <div>
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Sữa</label>
+                <input type="number" value={editingPrices.milkCow?.price || 0} onChange={e => setEditingPrices({...editingPrices, milkCow: {...editingPrices.milkCow, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Bò Vàng</label>
+                <input type="number" value={editingPrices.goldCow?.price || 0} onChange={e => setEditingPrices({...editingPrices, goldCow: {...editingPrices.goldCow, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá Cỏ</label>
+                <input type="number" value={editingPrices.grass?.price || 0} onChange={e => setEditingPrices({...editingPrices, grass: {...editingPrices.grass, price: Number(e.target.value)}})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: '#cbd5e1', display: 'block', marginBottom: 6 }}>Giá thu mua sữa / lít</label>
+                <input type="number" value={editingPrices.milkSellPrice || 0} onChange={e => setEditingPrices({...editingPrices, milkSellPrice: Number(e.target.value)})}
+                  style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 10, borderRadius: 10, color: '#fff', boxSizing: 'border-box' }} />
+              </div>
+            </div>
+            <button onClick={saveNewPrices} style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 12, fontWeight: 800, cursor: 'pointer' }}>Lưu bảng giá</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // Màn hình Khách hàng (User)
+  // ===== GIAO DIỆN USER =====
   const transferContent = `BVF${currentUser?.cccd || ''}`;
   const qrAmount = Number(depositAmount) || 0;
   const qrUrl = `https://img.vietqr.io/image/TCB-991169999999-compact2.png?amount=${qrAmount}&addInfo=${encodeURIComponent(transferContent)}&accountName=${encodeURIComponent('NGO HOANG VU')}`;
@@ -592,6 +691,7 @@ export default function App() {
       <div style={{ display: 'flex', background: '#1e293b', borderBottom: '1px solid #334155', padding: '0 24px', gap: 8, overflowX: 'auto' }}>
         <button onClick={() => setActiveTab('invest')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'invest' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'invest' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>📈 Đầu tư Bò</button>
         <button onClick={() => setActiveTab('my')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'my' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'my' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🏡 Bò của tôi</button>
+        <button onClick={() => setActiveTab('farm')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'farm' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'farm' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🐄 Trang trại cá nhân</button>
         <button onClick={() => setActiveTab('shop')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'shop' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'shop' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>🛒 Cửa hàng & Kho</button>
         <button onClick={() => setActiveTab('camera')} style={{ padding: '14px 18px', background: 'transparent', border: 'none', borderBottom: activeTab === 'camera' ? '3px solid #10b981' : '3px solid transparent', color: activeTab === 'camera' ? '#34d399' : '#94a3b8', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}><Video size={16} /> 📹 Camera Ba Vì</button>
       </div>
@@ -628,7 +728,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB BÒ CỦA TÔI */}
+        {/* TAB BÒ CỦA TÔI (Sở hữu chung) */}
         {activeTab === 'my' && (
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Bò bạn đang sở hữu ({mySharedCows.length})</h3>
@@ -641,14 +741,46 @@ export default function App() {
                   const now = Date.now();
                   const todayStr = new Date().toDateString();
                   const dailyCount = cow.lastResetDate === todayStr ? (cow.dailyHarvestCount || 0) : 0;
-                  const hunger = cow.hunger;
-                  const canHarvest = dailyCount < 2 && hunger >= 40;
+                  const hunger = cow.hunger; // Đã được tính tự động theo thời gian thực
+                  
+                  const canHarvestTime = !cow.nextHarvestAt || now >= cow.nextHarvestAt;
+                  const isUnderDailyLimit = dailyCount < 2;
+                  const canHarvest = canHarvestTime && isUnderDailyLimit && hunger >= 40;
+                  
+                  const timeLeft = cow.nextHarvestAt ? Math.max(0, cow.nextHarvestAt - now) : 0;
+                  const hoursLeft = Math.floor(timeLeft / 3600000);
+                  const minsLeft = Math.floor((timeLeft % 3600000) / 60000);
+
+                  let statusText = 'Sẵn sàng vắt sữa';
+                  if (!isUnderDailyLimit) statusText = 'Đã đủ 2 lần/ngày (Hẹn mai)';
+                  else if (!canHarvestTime) statusText = `Chờ chu kỳ: ${hoursLeft}h ${minsLeft}p`;
+                  else if (hunger < 40) statusText = 'Bò đang đói (<40%)';
+
                   return (
                     <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
-                      <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{cow.name}</h4>
-                      <p style={{ margin: '4px 0 12px', fontSize: 13, color: '#94a3b8' }}>
-                        Bạn sở hữu: <strong style={{ color: '#34d399' }}>{myShare?.percent}%</strong> · Độ no: <strong style={{ color: hunger < 40 ? '#f87171' : '#34d399' }}>{hunger}%</strong>
-                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{cow.name}</h4>
+                          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#94a3b8' }}>
+                            Bạn sở hữu: <strong style={{ color: '#34d399' }}>{myShare?.percent}%</strong> · Đã vắt hôm nay: <strong style={{ color: '#60a5fa' }}>{dailyCount}/2 lần</strong>
+                          </p>
+                        </div>
+                        <span style={{ background: canHarvest ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: canHarvest ? '#34d399' : '#fbbf24', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+                          {statusText}
+                        </span>
+                      </div>
+
+                      {/* Thanh độ no tự động giảm theo thời gian thực */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+                          <span>Độ no thực tế (Tự động giảm theo thời gian)</span>
+                          <span style={{ color: hunger < 40 ? '#f87171' : '#34d399' }}>{hunger}%</span>
+                        </div>
+                        <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${hunger}%`, height: '100%', background: hunger < 40 ? '#ef4444' : '#10b981' }} />
+                        </div>
+                      </div>
+
                       <div style={{ display: 'flex', gap: 10 }}>
                         <button onClick={() => feedSharedCow(cow)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 12, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
                           🌿 Cho bò ăn cỏ (Kho: {inventory.grass} bó)
@@ -666,56 +798,160 @@ export default function App() {
           </div>
         )}
 
+        {/* TAB TRANG TRẠI CÁ NHÂN */}
+        {activeTab === 'farm' && (
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Đàn bò cá nhân của bạn ({cows.length})</h3>
+            {cows.length === 0 ? (
+              <div style={{ background: '#1e293b', borderRadius: 16, padding: 40, textAlign: 'center', color: '#64748b' }}>Bạn chưa có bò cá nhân. Hãy vào Cửa hàng để mua.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 20 }}>
+                {cows.map(cow => {
+                  const todayStr = new Date().toDateString();
+                  const dailyCount = cow.lastResetDate === todayStr ? (cow.dailyHarvestCount || 0) : 0;
+                  const canHarvest = dailyCount < 2 && cow.hunger >= 40;
+
+                  return (
+                    <div key={cow.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                      <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>{cow.name}</h4>
+                      <p style={{ margin: '0 0 10px', fontSize: 12, color: '#94a3b8' }}>Tag: {cow.tag} · Đã vắt: {dailyCount}/2 lần hôm nay</p>
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
+                          <span>Độ no thực tế (Cần &gt;= 40)</span>
+                          <span style={{ color: cow.hunger < 40 ? '#f87171' : '#34d399' }}>{cow.hunger}%</span>
+                        </div>
+                        <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${cow.hunger}%`, height: '100%', background: cow.hunger < 40 ? '#ef4444' : '#10b981' }} />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => feedCow(cow.id)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🌿 Cho ăn</button>
+                        {cow.type === 'milk' && (
+                          <button onClick={() => harvestMilk(cow.id)} style={{ flex: 1, background: canHarvest ? '#059669' : '#334155', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: canHarvest ? 'pointer' : 'not-allowed', opacity: canHarvest ? 1 : 0.6 }}>🥛 Thu sữa</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TAB CỬA HÀNG & KHO */}
         {activeTab === 'shop' && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🛒 Cửa hàng vật phẩm</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 30 }}>
-              <div style={{ background: '#1e293b', padding: 20, borderRadius: 16, border: '1px solid #334155' }}>
-                <h4 style={{ margin: '0 0 8px' }}>🌿 {shopPrices.grass.name}</h4>
-                <p style={{ color: '#94a3b8', fontSize: 13, margin: '0 0 12px' }}>{shopPrices.grass.desc}</p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>{shopPrices.grass.price.toLocaleString()}đ</span>
-                  <button onClick={() => buyItem('grass')} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Mua</button>
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20, marginBottom: 24 }}>
+              <h3 style={{ margin: '0 0 14px', fontSize: 16, fontWeight: 800 }}>📦 Kho của bạn</h3>
+              <div style={{ display: 'flex', gap: 24, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 24 }}>
+                  <div><span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Cỏ</span><span style={{ fontSize: 18, fontWeight: 800, color: '#34d399' }}>{inventory.grass} bó</span></div>
+                  <div><span style={{ fontSize: 12, color: '#94a3b8', display: 'block' }}>Sữa</span><span style={{ fontSize: 18, fontWeight: 800, color: '#60a5fa' }}>{inventory.milk} lít</span></div>
                 </div>
+                {inventory.milk > 0 && (
+                  <button onClick={sellMilk} style={{ background: 'linear-gradient(135deg,#3b82f6,#2563eb)', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 12, fontWeight: 800, cursor: 'pointer' }}>
+                    Bán sữa ({inventory.milk}L = {(inventory.milk * shopPrices.milkSellPrice).toLocaleString()}đ)
+                  </button>
+                )}
               </div>
             </div>
-            <div style={{ background: '#1e293b', padding: 20, borderRadius: 16, border: '1px solid #334155' }}>
-              <h4 style={{ margin: '0 0 8px' }}>📦 Kho của bạn</h4>
-              <p style={{ margin: '4px 0' }}>Cỏ trong kho: <strong>{inventory.grass} bó</strong></p>
-              <p style={{ margin: '4px 0' }}>Sữa tươi: <strong>{inventory.milk} lít</strong></p>
-              {inventory.milk > 0 && (
-                <button onClick={sellMilk} style={{ marginTop: 12, background: '#f59e0b', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 8, cursor: 'pointer', fontWeight: 700 }}>Bán toàn bộ sữa</button>
-              )}
+            
+            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🛒 Cửa hàng</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 20 }}>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.milkCow.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.milkCow.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.milkCow.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('milkCow')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Bò Sữa</button>
+              </div>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.goldCow.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.goldCow.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.goldCow.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('goldCow')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Bò Vàng</button>
+              </div>
+              <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 16, padding: 20 }}>
+                <h4 style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700 }}>{shopPrices.grass.name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: '#94a3b8' }}>{shopPrices.grass.desc}</p>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#fbbf24', marginBottom: 14 }}>{shopPrices.grass.price.toLocaleString()}đ</div>
+                <button onClick={() => buyItem('grass')} style={{ width: '100%', background: '#059669', color: '#fff', border: 'none', padding: 10, borderRadius: 10, fontWeight: 800, cursor: 'pointer' }}>Mua Cỏ</button>
+              </div>
             </div>
           </div>
         )}
 
-        {/* TAB CAMERA BA VÌ */}
+        {/* TAB CAMERA TRỰC TIẾP BA VÌ */}
         {activeTab === 'camera' && (
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>Hệ thống Camera Trực Tiếp Nông Trại</h3>
-            <LiveCamera />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>📹 Camera Trực Tiếp Nông Trại Bò Vàng (Ba Vì)</h3>
+              <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, background: '#ef4444', borderRadius: '50%', display: 'inline-block' }}></span> LIVE 24/7
+              </span>
+            </div>
+
+            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 20, overflow: 'hidden', padding: 16 }}>
+              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#0f172a', borderRadius: 12, overflow: 'hidden' }}>
+                <video 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                >
+                  <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4" />
+                  Trình duyệt của bạn không hỗ trợ thẻ video.
+                </video>
+                <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(0,0,0,0.7)', padding: '6px 12px', borderRadius: 8, fontSize: 12, color: '#34d399', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, backdropFilter: 'blur(4px)' }}>
+                  🟢 Camera #01 · Trực tiếp từ Đồng cỏ Ba Vì · 1080p
+                </div>
+              </div>
+
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                <div>
+                  <h4 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>Khu chuồng trại cao sản Ba Vì - Camera #01</h4>
+                  <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>Trạng thái: Đang phát trực tiếp từ đồng cỏ Ba Vì. Bò đang thong thả gặm cỏ tươi.</p>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => alert("Đang kết nối góc máy chuồng Bò Vàng Giống...")} style={{ background: '#334155', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>📹 Góc máy 2</button>
+                  <button onClick={() => alert("Đang kết nối góc máy khu vắt sữa...")} style={{ background: '#334155', color: '#34d399', border: 'none', padding: '8px 14px', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>🥛 Góc máy Vắt sữa</button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Modal Nạp Tiền */}
+      {/* Modal Nạp tiền */}
       {showDepositModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20, zIndex: 1000 }}>
-          <div style={{ background: '#1e293b', padding: 24, borderRadius: 16, width: '100%', maxWidth: 400, border: '1px solid #334155' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 18 }}>Nạp tiền vào tài khoản</h3>
-            <input type="number" placeholder="Nhập số tiền (VNĐ)" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
-              style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 10, color: '#fff', marginBottom: 16, boxSizing: 'border-box' }} />
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 20 }}>
+          <div style={{ background: '#1e293b', borderRadius: 20, padding: 28, width: '100%', maxWidth: 440, border: '1px solid #334155', maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 800, textAlign: 'center' }}>Nạp tiền</h3>
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 10 }}>Chọn nhanh:</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {[100000, 500000, 1000000, 2000000, 5000000].map(a => (
+                  <button key={a} onClick={() => setDepositAmount(a.toString())} style={{ background: depositAmount === a.toString() ? '#10b981' : '#0f172a', color: '#fff', border: '1px solid #334155', padding: '8px 14px', borderRadius: 10, fontWeight: 600, cursor: 'pointer' }}>{a.toLocaleString()}đ</button>
+                ))}
+              </div>
+            </div>
+            <input type="number" placeholder="Nhập số tiền" value={depositAmount} onChange={e => setDepositAmount(e.target.value)}
+              style={{ width: '100%', background: '#0f172a', border: '1px solid #334155', padding: 12, borderRadius: 12, color: '#fff', marginBottom: 16, boxSizing: 'border-box' }} />
             {qrAmount >= 10000 && (
-              <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                <img src={qrUrl} alt="QR Code" style={{ width: '200px', height: '200px', background: '#fff', padding: 8, borderRadius: 8 }} />
-                <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>Nội dung chuyển khoản: <strong style={{ color: '#34d399' }}>{transferContent}</strong></p>
+              <div style={{ background: '#0f172a', borderRadius: 14, padding: 16, marginBottom: 20, textAlign: 'center' }}>
+                <img src={qrUrl} alt="QR" style={{ width: 200, height: 200, borderRadius: 12, background: '#fff', padding: 8 }} />
+                <div style={{ marginTop: 12, textAlign: 'left', fontSize: 13, lineHeight: 1.6 }}>
+                  <p style={{ margin: 0 }}><strong>Ngân hàng:</strong> Techcombank</p>
+                  <p style={{ margin: 0 }}><strong>STK:</strong> 991169999999</p>
+                  <p style={{ margin: 0 }}><strong>Chủ TK:</strong> Ngô Hoàng Vũ</p>
+                  <p style={{ margin: 0, color: '#34d399' }}><strong>Nội dung:</strong> {transferContent}</p>
+                  <p style={{ margin: 0, color: '#fbbf24' }}><strong>Số tiền:</strong> {qrAmount.toLocaleString()}đ</p>
+                </div>
               </div>
             )}
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button onClick={requestDeposit} style={{ flex: 1, background: '#10b981', color: '#fff', border: 'none', padding: 12, borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Đã chuyển khoản</button>
-              <button onClick={() => setShowDepositModal(false)} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 12, borderRadius: 10, fontWeight: 700, cursor: 'pointer' }}>Đóng</button>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => { setShowDepositModal(false); setDepositAmount(''); }} style={{ flex: 1, background: '#334155', color: '#fff', border: 'none', padding: 13, borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Đóng</button>
+              <button onClick={requestDeposit} style={{ flex: 1, background: 'linear-gradient(135deg,#10b981,#059669)', color: '#fff', border: 'none', padding: 13, borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}>Tôi đã chuyển</button>
             </div>
           </div>
         </div>
@@ -723,3 +959,4 @@ export default function App() {
     </div>
   );
 }
+
